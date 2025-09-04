@@ -1,5 +1,6 @@
 {% from 'bootstrap5/utils.html' import render_icon %}
 {% from 'navbar.jinja2' import barra_navegacao with context %}
+{% from 'utils.jinja2' import render_messages with context %}
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -19,6 +20,7 @@
 </head>
 <body id="page-top" class="d-flex flex-column min-vh-100 mx-2 mt-3">
 {{ barra_navegacao() }}
+{{ render_messages() }}
 {% if jumbo %}
     <div class="my-5">
         <div class="p-5 text-center bg-body-tertiary">

@@ -1,0 +1,5 @@
+{% from 'bootstrap5/form.html' import render_form %}
+{% extends "layout.jinja2" %}
+{% block content %}
+    {{ render_form(form, novalidate=True) }}
+{% endblock %}
