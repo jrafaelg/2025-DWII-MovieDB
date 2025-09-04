@@ -18,11 +18,11 @@ def configure_logging(logging_level: int = logging.DEBUG,
 
 
 class MainConsoleFormatter(logging.Formatter):
-    GREY = "\x1b[38;20m"
-    GREEN = "\x1b[32;20m"
-    YELLOW = "\x1b[33;20m"
-    RED = "\x1b[31;20m"
-    RESET = "\x1b[0m"
+    GREY = "\x1b[90m"  # Bright black (dark gray)
+    GREEN = "\x1b[32m"  # Green
+    YELLOW = "\x1b[33m"  # Yellow
+    RED = "\x1b[31m"  # Red
+    RESET = "\x1b[0m"  # Reset
     FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
     FORMATS = {
@@ -34,7 +34,8 @@ class MainConsoleFormatter(logging.Formatter):
     }
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
+        log_fmt = type(self).FORMATS.get(record.levelno,
+                                         type(self).GREY + type(self).FORMAT + type(self).RESET)
         formatter = logging.Formatter(log_fmt)
         # noinspection StrFormat
         return formatter.format(record)
