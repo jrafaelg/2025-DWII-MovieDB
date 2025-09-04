@@ -32,6 +32,21 @@ def create_app(config_filename: str = 'config.dev.json') -> Flask:
         app.logger.fatal("O arquivo de configuração '%s' não existe" % (config_filename,))
         sys.exit(1)
 
+    if "SQLALCHEMY_DATABASE_URI" not in app.config:
+        app.logger.fatal("A chave 'SQLALCHEMY_DATABASE_URI' não está "
+                         "presente no arquivo de configuração")
+        sys.exit(1)
+
+    if "APP_HOST" not in app.config:
+        app.logger.warning("A chave 'APP_HOST' não está presente no "
+                           "arquivo de configuração. Utilizando 0.0.0.0")
+        app.config["APP_HOST"] = "0.0.0.0"
+
+    if "APP_PORT" not in app.config:
+        app.logger.warning("A chave 'APP_PORT' não está presente no "
+                           "arquivo de configuração. Utilizando 5000")
+        app.config["APP_PORT"] = 5000
+
     app.logger.debug("Registrando modulos")
     bootstrap.init_app(app)
     db.init_app(app)
