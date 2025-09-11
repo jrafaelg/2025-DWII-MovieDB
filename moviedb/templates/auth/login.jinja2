@@ -6,6 +6,9 @@
 {% endblock %}
 {% block footer %}
     <div class="text-center">
-        Já tem uma conta? <a href="{{ url_for('auth.login') }}" class="text-dark">Faça o login!</a>
+        Não tem uma conta? <a href="{{ url_for('auth.register') }}" class="text-dark">Crie uma!</a>
+    </div>
+    <div class="text-center">
+        <a href="#" class="text-dark">Esqueceu a senha?</a>
     </div>
 {% endblock %}

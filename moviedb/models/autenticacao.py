@@ -1,16 +1,17 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, String, Uuid
+from flask_login import UserMixin
+from sqlalchemy import Boolean, Column, select, String, Uuid
 
-from moviedb.models.mixins import BasicRepositoryMixin
 from moviedb import db
+from moviedb.models.mixins import BasicRepositoryMixin
 
 
 def normalizar_email(email: str) -> str:
     return email.lower()
 
 
-class User(db.Model, BasicRepositoryMixin):
+class User(db.Model, BasicRepositoryMixin, UserMixin):
     __tablename__ = "usuarios"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -42,3 +43,14 @@ class User(db.Model, BasicRepositoryMixin):
     def password(self, value):
         from werkzeug.security import generate_password_hash
         self.password_hash = generate_password_hash(value)
+
+    @classmethod
+    def get_by_email(cls, email: str):
+        return db.session.execute(
+                select(cls).
+                where(User.email_normalizado == normalizar_email(email))
+        ).scalar_one_or_none()
+
+    def check_password(self, password) -> bool:
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password_hash, password)
