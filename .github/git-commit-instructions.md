@@ -2,12 +2,13 @@
 
 Todos os commits neste projeto devem seguir o seguinte formato:
 
-<tipo>(<escopo>): <resumo curto>
+```
+<tipo> (<escopo>): <resumo curto>
 <linha em branco>
 [descrição mais longa opcional]
 <linha em branco>
 [BREAKING CHANGE opcional: descreva a mudança crítica]
-
+```
 ## Tipos de commits
 
 - **feat**: Introdução de uma nova funcionalidade.
@@ -34,8 +35,8 @@ Todos os commits neste projeto devem seguir o seguinte formato:
 ## Exemplos
 
 ```bash
-feat(parser): adicionar suporte para parsing de arrays
-fix(ui): corrigir alinhamento do botão
+feat (parser): adicionar suporte para parsing de arrays
+fix (ui): corrigir alinhamento do botão
 docs: atualizar README com instruções de uso
 refactor: melhorar performance do processamento de dados
 chore: atualizar dependências do projeto
