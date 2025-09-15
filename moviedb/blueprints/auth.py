@@ -3,8 +3,9 @@ from urllib.parse import urlsplit
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from moviedb.forms.auth import LoginForm, RegistrationForm
 from moviedb import db
+from moviedb.forms.auth import LoginForm, RegistrationForm
+from moviedb.infra.tokens import create_jwt_token, verify_jwt_token
 from moviedb.models.autenticacao import User
 
 bp = Blueprint(name='auth',
@@ -32,18 +33,26 @@ def register():
     form = RegistrationForm()
     if form.validate_on_submit():
         usuario = User()
-        usuario.nome=form.nome.data
-        usuario.email=form.email.data
-        usuario.ativo=True
-        usuario.password=form.password.data
+        usuario.nome = form.nome.data
+        usuario.email = form.email.data
+        usuario.ativo = False
+        usuario.password = form.password.data
         db.session.add(usuario)
+        db.session.flush()
+        db.session.refresh(usuario)
+        body = render_template('auth/email/confirmation-email.jinja2',
+                               user=usuario,
+                               token=create_jwt_token('validate_email', usuario.id))
+        usuario.send_email(subject="Confirme o seu email", body=body)
         db.session.commit()
-        flash("Cadastro efetuado com sucesso!", category='success')
+        flash("Cadastro efetuado com sucesso. Confirme o seu email antes de logar "
+              "no sistema", category='success')
         return redirect(url_for('root.index'))
 
     return render_template('auth/register.jinja2',
                            title="Cadastrar um novo usuário",
                            form=form)
+
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -104,3 +113,26 @@ def logout():
     logout_user()
     flash("Logout efetuado com sucesso!", category='success')
     return redirect(url_for('root.index'))
+
+
+@bp.route('/valida_email/<token>')
+def valida_email(token):
+    if current_user.is_authenticated:
+        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
+
+    claims = verify_jwt_token(token)
+    if not (claims.get('valid', False) and {'user_id', 'action'}.issubset(claims)):
+        flash("Token incorreto ou incompleto", category='warning')
+        return redirect(url_for('root.index'))
+
+    usuario = User.get_by_id(claims.get('user_id'))
+    if (usuario is not None and
+            not usuario.email_validado and
+            claims.get('action') == 'validate_email'):
+        usuario.ativo = True
+        flash(f"Email {usuario.email} validado!", category='success')
+        db.session.commit()
+        return redirect(url_for('auth.login'))
+    flash("Token inválido", category='warning')
+    return redirect(url_for('auth.login'))

@@ -52,6 +52,9 @@ def create_app(config_filename: str = 'config.dev.json') -> Flask:
         app.logger.warning("A chave 'SECRET_KEY' não está presente no "
                            "arquivo de configuração")
         app.logger.warning("Gerando uma aleatória: '%s'" % (secret_key,))
+        app.logger.warning("Para não invalidar os logins persistentes efetuados nesta "
+                           "instância da aplicação, adicione a chave acima no arquivo "
+                           "de configuração")
         app.config["SECRET_KEY"] = secret_key
 
     app.logger.debug("Registrando modulos")

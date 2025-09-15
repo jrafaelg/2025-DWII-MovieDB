@@ -1,7 +1,7 @@
 import uuid
 
 from flask_login import UserMixin
-from sqlalchemy import Boolean, Column, select, String, Uuid
+from sqlalchemy import Boolean, Column, DateTime, select, String, Uuid
 
 from moviedb import db
 from moviedb.models.mixins import BasicRepositoryMixin
@@ -18,7 +18,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     nome = Column(String(60), nullable=False)
     email_normalizado = Column(String(180), nullable=False, unique=True, index=True)
     password_hash = Column(String(256), nullable=False)
-    ativo = Column(Boolean, nullable=False, default=True)
+    ativo = Column(Boolean, nullable=False, default=False)
 
     @property
     def email(self):
@@ -54,3 +54,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     def check_password(self, password) -> bool:
         from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
+
+    def send_email(self, subject: str,
+                         body: str,
+                         html: str = None):
+        pass
