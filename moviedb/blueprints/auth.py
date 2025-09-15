@@ -1,6 +1,6 @@
 from urllib.parse import urlsplit
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from moviedb import db
@@ -20,7 +20,9 @@ def register():
 
     - Usuários já autenticados não podem acessar esta rota.
     - Se o formulário for enviado e validado, cria um novo usuário,
-      salva no banco de dados e redireciona para a página inicial.
+      salva no banco de dados, envia um email de confirmação e
+      redireciona para a página inicial.
+    - O usuário deve confirmar o email antes de conseguir logar.
     - Caso contrário, renderiza o template de registro.
 
     Returns:
@@ -38,11 +40,15 @@ def register():
         usuario.ativo = False
         usuario.password = form.password.data
         db.session.add(usuario)
+        # Realiza o flush para garantir que o usuário tenha um ID gerado antes do commit.
         db.session.flush()
+        # Atualiza o objeto usuário com os dados mais recentes do banco de dados.
         db.session.refresh(usuario)
-        body = render_template('auth/email/confirmation-email.jinja2',
-                               user=usuario,
-                               token=create_jwt_token('validate_email', usuario.id))
+        token = create_jwt_token(action='validate_email', sub=usuario.email)
+        current_app.logger.debug("Token de validação de email: %s", token)
+        body = render_template('auth/email_confirmation.jinja2',
+                               nome=usuario.nome,
+                               url=url_for('auth.valida_email', token=token))
         usuario.send_email(subject="Confirme o seu email", body=body)
         db.session.commit()
         flash("Cadastro efetuado com sucesso. Confirme o seu email antes de logar "
@@ -117,18 +123,34 @@ def logout():
 
 @bp.route('/valida_email/<token>')
 def valida_email(token):
+    """
+    Valida o email do usuário a partir de um token JWT.
+
+    - Usuários autenticados não podem acessar esta rota.
+    - O token é verificado e deve conter as claims 'sub' (email) e 'action' igual a
+    'validate_email'.
+    - Se o usuário existir, estiver inativo e o token for válido, ativa o usuário e exibe
+    mensagem de sucesso.
+    - Em caso de token inválido ou usuário já ativo, exibe mensagem de erro.
+
+    Args:
+        token (str): Token JWT enviado na URL para validação do email.
+
+    Returns:
+        Response: Redireciona para a página de login ou inicial, conforme o caso.
+    """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
         return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     claims = verify_jwt_token(token)
-    if not (claims.get('valid', False) and {'user_id', 'action'}.issubset(claims)):
+    if not (claims.get('valid', False) and {'sub', 'action'}.issubset(claims)):
         flash("Token incorreto ou incompleto", category='warning')
         return redirect(url_for('root.index'))
 
-    usuario = User.get_by_id(claims.get('user_id'))
+    usuario = User.get_by_email(claims.get('sub'))
     if (usuario is not None and
-            not usuario.email_validado and
+            not usuario.ativo and
             claims.get('action') == 'validate_email'):
         usuario.ativo = True
         flash(f"Email {usuario.email} validado!", category='success')

@@ -1,8 +1,9 @@
+from time import time
+from typing import Any, Dict, Optional
+
 import jwt
 from flask import current_app
-from time import time
-import uuid
-from typing import Any, Dict, Optional
+
 
 def create_jwt_token(action: str = "",
                      sub: Any = None,
@@ -13,9 +14,9 @@ def create_jwt_token(action: str = "",
 
     Args:
         action: A ação para a qual o token está sendo usado (opcional).
-        sub: O assunto do token (por exemplo, ID do usuário).
+        sub: O assunto do token (por exemplo, email do usuário).
         expires_in: O tempo de expiração do token em segundos. Default de 10min
-        extra_data: Dados adicionais para incluir no payload (opcional).
+        extra_data: Dicionário com dados adicionais para incluir no payload (opcional).
 
     Returns:
         O token JWT codificado.
@@ -44,25 +45,17 @@ def create_jwt_token(action: str = "",
 
 def verify_jwt_token(token: str) -> Dict[str, Any]:
     """
-     Verifica a validade de um token JWT e retorna as reivindicações associadas.
+    Verifica um token JWT e retorna suas reivindicações.
 
-     Args:
-         token (str): O token JWT a ser verificado.
+    Args:
+        token: O token JWT a ser verificado.
 
-     Returns:
-         Dict[str, Any]: Um dicionário contendo as reivindicações do token. As chaves incluem:
-             - 'valid' (bool): Indica se o token é válido ou não.
-             - 'user_id' (UUID): O ID do usuário associado ao token, se fornecido.
-             - 'action' (str): A ação associada ao token, se fornecida.
-             - 'age' (int): A idade do token, em segundos desde a assinatura.
-             - 'extra_data' (dict): Dados adicionais incluídos no token, se fornecidos.
-
-     Raises:
-         - jwt.ExpiredSignatureError: Se o token JWT estiver expirado.
-         - jwt.InvalidTokenError: Se o token JWT for inválido.
-         - ValueError: Se ocorrer um erro ao decodificar o token.
-
-     """
+    Returns:
+        Um dicionário contendo as reivindicações do token.
+        O dicionário sempre conterá uma chave 'valid' (booleano).
+        Se o token for inválido, uma chave 'reason' pode estar presente.
+        Se o token for válido, ele conterá 'sub', 'action', 'age' e 'extra_data' (se presentes).
+    """
     claims: Dict[str, Any] = {'valid': False}
 
     try:
@@ -70,9 +63,9 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
                              key=current_app.config.get('SECRET_KEY'),
                              algorithms=['HS256'])
 
-        claims.update({'valid'  : True,
-                       'user_id': uuid.UUID(payload.get('sub', None)),
-                       'action' : payload.get('action', None)})
+        claims.update({'valid' : True,
+                       'sub'   : payload.get('sub', None),
+                       'action': payload.get('action', None)})
 
         if 'iat' in payload:
             claims.update({'age': int(time()) - int(payload.get('iat'))})
@@ -81,12 +74,16 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
             claims.update({'extra_data': payload.get('extra_data')})
 
     except jwt.ExpiredSignatureError as e:
-        current_app.logger.error("JWT Token Expired: %s", e)
+        current_app.logger.error("JWT Expired: %s", e)
         claims.update({'reason': "expired"})
 
     except jwt.InvalidTokenError as e:
-        current_app.logger.error("Invalid JWT Token: %s", e)
+        current_app.logger.error("Invalid JWT: %s", e)
         claims.update({'reason': "invalid"})
+
+    except jwt.InvalidSignatureError as e:
+        current_app.logger.error("Invalid JWT signature: %s", e)
+        claims.update({'reason': "bad_signature"})
 
     except ValueError as e:
         current_app.logger.error("ValueError: %s", e)
