@@ -10,5 +10,11 @@
   "TIMEZONE": "America/Sao_Paulo",
   "SQLALCHEMY_DATABASE_URI": "sqlite:///mymovie.db",
   "EMAIL_SENDER": "",
-  "SERVER_TOKEN": ""
+  "SERVER_TOKEN": "",
+  "SEND_EMAIL": false,
+  "PASSWORD_MIN": 8,
+  "PASSWORD_MINUSCULA": false,
+  "PASSWORD_NUMERO": false,
+  "PASSWORD_SIMBOLO": false,
+  "PASSWORD_MAIUSCULA": false
 }

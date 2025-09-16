@@ -4,9 +4,11 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from flask_login import current_user, login_required, login_user, logout_user
 
 from moviedb import db
-from moviedb.forms.auth import LoginForm, RegistrationForm
+from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, RegistrationForm, \
+    SetNewPasswordForm
 from moviedb.infra.tokens import create_jwt_token, verify_jwt_token
-from moviedb.models.autenticacao import User
+from moviedb.models.autenticacao import normalizar_email, User
+from moviedb.models.enumeracoes import JWT_action
 
 bp = Blueprint(name='auth',
                import_name=__name__,
@@ -44,12 +46,13 @@ def register():
         db.session.flush()
         # Atualiza o objeto usuário com os dados mais recentes do banco de dados.
         db.session.refresh(usuario)
-        token = create_jwt_token(action='validate_email', sub=usuario.email)
+        token = create_jwt_token(action=JWT_action.VALIDAR_EMAIL, sub=usuario.email)
         current_app.logger.debug("Token de validação de email: %s", token)
         body = render_template('auth/email_confirmation.jinja2',
                                nome=usuario.nome,
                                url=url_for('auth.valida_email', token=token))
-        usuario.send_email(subject="Confirme o seu email", body=body)
+        if not usuario.send_email(subject="Confirme o seu email", body=body):
+            flash("Erro no envio do email de confirmação da conta", category="danger")
         db.session.commit()
         flash("Cadastro efetuado com sucesso. Confirme o seu email antes de logar "
               "no sistema", category='success')
@@ -151,10 +154,67 @@ def valida_email(token):
     usuario = User.get_by_email(claims.get('sub'))
     if (usuario is not None and
             not usuario.ativo and
-            claims.get('action') == 'validate_email'):
+            claims.get('action') == JWT_action.VALIDAR_EMAIL):
         usuario.ativo = True
         flash(f"Email {usuario.email} validado!", category='success')
         db.session.commit()
         return redirect(url_for('auth.login'))
     flash("Token inválido", category='warning')
     return redirect(url_for('auth.login'))
+
+
+@bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
+
+    claims = verify_jwt_token(token)
+    if not (claims.get('valid', False) and {'sub', 'action'}.issubset(claims)):
+        flash("Token incorreto ou incompleto", category='warning')
+        return redirect(url_for('root.index'))
+    usuario = User.get_by_email(claims.get('sub'))
+    if usuario is not None and claims.get('action') == JWT_action.RESET_PASSWORD:
+        form = SetNewPasswordForm()
+        if form.validate_on_submit():
+            usuario.password = form.password.data
+            db.session.commit()
+            flash("Sua senha foi redefinida com sucesso", category='success')
+            return redirect(url_for('auth.login'))
+        return render_template('auth/simple_form.jinja2',
+                               title_card="Escolha uma nova senha",
+                               form=form)
+    # token não é de reset_password ou é para um usuário inexistente
+    flash("Token inválido", category='warning')
+    return redirect(url_for('root.index'))
+
+
+@bp.route('/new_password', methods=['GET', 'POST'])
+def new_password():
+    if current_user.is_authenticated:
+        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+        return redirect(request.referrer if request.referrer else url_for('index'))
+
+    form = AskToResetPasswordForm()
+    if form.validate_on_submit():
+        email = normalizar_email(form.email.data)
+        usuario = User.get_by_email(email)
+        flash(f"Se houver uma conta com o email {email}, uma mensagem será enviada com as "
+              f"instruções para a troca da senha", category='info')
+        if usuario is not None:
+            token = create_jwt_token(JWT_action.RESET_PASSWORD,
+                                     sub=usuario.email)
+            body = render_template('auth/email_new_password.jinja2',
+                                   nome=usuario.nome,
+                                   url=url_for('auth.reset_password', token=token))
+            usuario.send_email(subject="Altere a sua senha", body=body)
+            return redirect(url_for('auth.login'))
+        current_app.logger.warning("Pedido de reset de senha para usuário inexistente (%s)",
+                                   email)
+        return redirect(url_for('auth.login'))
+    return render_template('auth/simple_form.jinja2',
+                           title="Esqueci minha senha",
+                           title_card="Esqueci minha senha",
+                           subtitle_card="Digite o seu email cadastrado no sistema para "
+                                         "solicitar uma nova senha",
+                           form=form)

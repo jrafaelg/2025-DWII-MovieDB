@@ -4,8 +4,10 @@ from typing import Any, Dict, Optional
 import jwt
 from flask import current_app
 
+from moviedb.models.enumeracoes import JWT_action
 
-def create_jwt_token(action: str = "",
+
+def create_jwt_token(action: JWT_action = JWT_action.NO_ACTION,
                      sub: Any = None,
                      expires_in: int = 600,
                      extra_data: Optional[Dict[str, str]] = None) -> str:
@@ -34,7 +36,7 @@ def create_jwt_token(action: str = "",
         'iat'   : agora,
         'nbf'   : agora,
         'exp'   : agora + expires_in,
-        'action': action.lower()
+        'action': action.name
     }
     if extra_data is not None and isinstance(extra_data, dict):
         payload['extra_data'] = extra_data
@@ -63,9 +65,10 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
                              key=current_app.config.get('SECRET_KEY'),
                              algorithms=['HS256'])
 
+        acao = JWT_action[payload.get('action', 'NO_ACTION')]
         claims.update({'valid' : True,
                        'sub'   : payload.get('sub', None),
-                       'action': payload.get('action', None)})
+                       'action': acao})
 
         if 'iat' in payload:
             claims.update({'age': int(time()) - int(payload.get('iat'))})

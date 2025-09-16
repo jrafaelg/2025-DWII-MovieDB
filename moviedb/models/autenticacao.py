@@ -85,19 +85,27 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         Returns:
             True se conseguir enviar o e-mail, False caso contrário.
         """
-        from postmarker.core import PostmarkClient
-        postmark = PostmarkClient(server_token=current_app.config['SERVER_TOKEN'])
-        conteudo = postmark.emails.Email(
-                From=current_app.config['EMAIL_SENDER'],
-                To=self.email,
-                Subject=subject,
-                TextBody=body
-        )
-        response = conteudo.send()
-        current_app.logger.debug("Email enviado para %s", self.email)
-        current_app.logger.debug("Resposta do Postmark: %s", response)
-        if response['ErrorCode'] != 0:
-            current_app.logger.error("Erro ao enviar email para %s: %s",
-                                     self.email, response['Message'])
-            return False
+        if current_app.config.get('SEND_EMAIL'):
+            from postmarker.core import PostmarkClient
+            postmark = PostmarkClient(server_token=current_app.config['SERVER_TOKEN'])
+            conteudo = postmark.emails.Email(
+                    From=current_app.config['EMAIL_SENDER'],
+                    To=self.email,
+                    Subject=subject,
+                    TextBody=body
+            )
+            response = conteudo.send()
+            current_app.logger.debug("Email enviado para %s", self.email)
+            current_app.logger.debug("Resposta do Postmark: %s", response)
+            if response['ErrorCode'] != 0:
+                current_app.logger.error("Erro ao enviar email para %s: %s",
+                                         self.email, response['Message'])
+                return False
+        else:
+            current_app.logger.debug("Mensagem que SERIA enviada")
+            current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
+            current_app.logger.debug("To: %s", self.email)
+            current_app.logger.debug("Subject: %s", subject)
+            current_app.logger.debug("", )
+            current_app.logger.debug("%s", body)
         return True
