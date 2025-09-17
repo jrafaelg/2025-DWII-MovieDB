@@ -1,0 +1,53 @@
+{% from 'bootstrap5/form.html' import render_form %}
+{% extends "layout.jinja2" %}
+{% block card_col %}col-xxl-9 col-sm-12{% endblock %}
+{% block content %}
+    <form id="form" action="" method="post" class="form"
+          enctype="multipart/form-data" role="form"
+          novalidate>
+        <div class="container d-flex">
+            <div class="me-auto">
+                {% if current_user.com_foto %}
+                    <img src="{{ url_for('auth.imagem', id_usuario=current_user.id) }}"
+                         alt="Foto do usuário"
+                         class="img-thumbnail"
+                         width="250" />
+                {% endif %}
+            </div>
+            <div class="ms-5 flex-grow-1">
+                {{ form.csrf_token() }}
+                {{ form.id }}
+                <div class="mb-3">
+                    {{ form.nome.label(class="form-label") }}
+                    {% if form.nome.errors -%}
+                        {{ form.nome(class="form-control is-invalid") }}
+                    {%- else -%}
+                        {{ form.nome(class="form-control") }}
+                    {%- endif %}
+                </div>
+                <div class="mb-3">
+                    {{ form.email.label(class="form-label text-muted") }}
+                    {{ form.email(class="form-control", readonly=true, style="background-color: #f8f9fa; color: #6c757d;") }}
+                    <div class="form-text text-muted">
+                        <small><i class="fas fa-lock"></i> O email não pode ser alterado</small>
+                    </div>
+                </div>
+                <div class="row mb-3 align-items-end">
+                    {{ form.foto_raw.label(class="form-label") }}
+                    {{ form.foto_raw(class="form-control") }}
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock %}
+
+{% block footer %}
+    <div class="row row-cols-lg-auto g-3 align-items-center py-2 px-5">
+        <div class="col">
+            {{ form.submit(class="btn btn-primary", form="form") }}
+            {% if 'remover_foto' in form %}
+                {{ form.remover_foto(class="btn btn-secondary", form="form") }}
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

@@ -1,7 +1,9 @@
-
+from flask import current_app
+from flask_login import current_user
 from flask_wtf import FlaskForm
-from wtforms.fields.simple import BooleanField, PasswordField, StringField, SubmitField
-from wtforms.validators import Email, EqualTo, InputRequired, Length, ValidationError
+from flask_wtf.file import FileAllowed, FileField
+from wtforms.fields.simple import BooleanField, HiddenField, PasswordField, StringField, SubmitField
+from wtforms.validators import Email, EqualTo, InputRequired, Length
 
 
 class UniqueEmail(object):
@@ -94,6 +96,69 @@ class SenhaComplexa(object):
         return
 
 
+from wtforms.validators import ValidationError
+
+
+class DadosImutaveisDoUsuario:
+    """
+    Validador WTForms para garantir que um campo não seja modificado por um usuário.
+
+    Este validador compara o valor do campo com o valor correspondente no
+    objeto `current_user`. Se os valores forem diferentes, uma `ValidationError`
+    é levantada.
+
+    Casos limite:
+        - Usuário não autenticado: lança exceção.
+        - Campo 'id' convertido para string para garantir comparação correta.
+    """
+
+    def __init__(self, field_name: str, message: str = None) -> None:
+        """
+        Inicializa o validador de campos imutáveis do usuário.
+
+        Args:
+            field_name (str): Nome do atributo no objeto `current_user` a ser comparado.
+            message (str, opcional): Mensagem de erro personalizada.
+
+        Design:
+            - Permite customização da mensagem de erro.
+        """
+        self.field_name = field_name
+        self.message = message or (
+            f"Tentativa de modificação não autorizada do campo {field_name}"
+        )
+
+    def __call__(self, form, field) -> None:
+        """
+        Executa a validação do campo imutável.
+
+        Utiliza logging para registrar tentativas de violação.
+
+        Args:
+            form: O formulário WTForms sendo validado.
+            field: O campo a ser verificado.
+
+        Raises:
+            ValidationError: Se o usuário não estiver autenticado ou se o valor
+            do campo for diferente do valor esperado.
+        """
+        if not current_user.is_authenticated:
+            raise ValidationError("Usuário não autenticado")
+
+        expected_value = getattr(current_user, self.field_name)
+        if self.field_name == 'id':
+            expected_value = str(expected_value)
+
+        if field.data != expected_value:
+            current_app.logger.warning("Violação da integridade dos dados")
+            current_app.logger.warning(
+                    f"Usuário {current_user.id} tentou "
+                    f"modificar o campo {self.field_name} "
+                    f"de '{expected_value}' para '{field.data}'"
+            )
+            raise ValidationError(self.message)
+
+
 class RegistrationForm(FlaskForm):
     nome = StringField(
             label="Nome",
@@ -108,8 +173,7 @@ class RegistrationForm(FlaskForm):
     password = PasswordField(
             label="Senha",
             validators=[InputRequired(message="É necessário escolher uma senha"),
-                        SenhaComplexa()
-                        ])
+                        SenhaComplexa()])
     password2 = PasswordField(
             label="Confirme a senha",
             validators=[InputRequired(message="É necessário repetir a senha"),
@@ -154,3 +218,24 @@ class AskToResetPasswordForm(FlaskForm):
                 Length(max=180, message="O email pode ter até 180 caracteres")
             ])
     submit = SubmitField("Redefinir a senha")
+
+
+class ProfileForm(FlaskForm):
+    id = HiddenField(validators=[DadosImutaveisDoUsuario('id')])
+
+    nome = StringField(
+            label="Nome",
+            validators=[InputRequired(message="É obrigatório informar um nome para cadastro"),
+                        Length(max=60,
+                               message="O nome pode ter até 60 caracteres")])
+    email = StringField(
+            label="Email",
+            validators=[DadosImutaveisDoUsuario('email')])
+
+    foto_raw = FileField(
+            label="Foto de perfil",
+            validators=[FileAllowed(upload_set=['jpg', 'jpeg', 'png'],
+                                    message="Apenas arquivos JPG ou PNG")])
+
+    submit = SubmitField("Efetuar as mudanças...")
+    remover_foto = SubmitField("e remover foto")

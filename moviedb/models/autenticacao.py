@@ -1,8 +1,9 @@
 import uuid
+from base64 import b64decode, b64encode
 
 from flask import current_app
 from flask_login import UserMixin
-from sqlalchemy import Boolean, Column, select, String, Uuid
+from sqlalchemy import Boolean, Column, select, String, Text, Uuid
 
 from moviedb import db
 from moviedb.models.mixins import BasicRepositoryMixin
@@ -37,6 +38,10 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     email_normalizado = Column(String(180), nullable=False, unique=True, index=True)
     password_hash = Column(String(256), nullable=False)
     ativo = Column(Boolean, nullable=False, default=False)
+
+    com_foto = Column(Boolean, default=False)
+    foto_base64 = Column(Text, nullable=True, default=None)
+    foto_mime = Column(String(32), nullable=True, default=None)
 
     @property
     def email(self):
@@ -73,6 +78,47 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
 
+    @property
+    def foto(self) -> (bytes, str):
+        if self.com_foto:
+            data = b64decode(self.foto_base64)
+            mime_type = self.foto_mime
+        else:
+            data = None
+            mime_type = None
+        return data, mime_type
+
+    @foto.setter
+    def foto(self, value):
+        """
+        Setter para a foto do usuário.
+
+        Atualiza os campos relacionados à foto do usuário. Se o valor for None,
+        remove a foto e limpa os campos associados. Caso contrário, tenta armazenar
+        a foto em base64 e o tipo MIME. Lida com o caso em que value não possui os
+        métodos/atributos esperados, registrando o erro.
+
+        Args:
+            value: Um arquivo com métodos `read()` e atributo `mimetype`, ou None.
+        """
+        if value is None:
+            self.com_foto = False
+            self.foto_base64 = None
+            self.foto_mime = None
+        else:
+            try:
+                self.com_foto = True
+                self.foto_base64 = b64encode(value.read()).decode('utf-8')
+                self.foto_mime = value.mimetype
+            except AttributeError as e:
+                # value não possui read() ou mimetype
+                self.com_foto = False
+                self.foto_base64 = None
+                self.foto_mime = None
+                # Registra o erro para depuração
+                if hasattr(current_app, "logger"):
+                    current_app.logger.error("Erro ao definir foto: %s", str(e))
+
     def send_email(self, subject: str,
                    body: str) -> bool:
         """
@@ -95,17 +141,20 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                     TextBody=body
             )
             response = conteudo.send()
-            current_app.logger.debug("Email enviado para %s", self.email)
-            current_app.logger.debug("Resposta do Postmark: %s", response)
+            if hasattr(current_app, "logger"):
+                current_app.logger.debug("Email enviado para %s", self.email)
+                current_app.logger.debug("Resposta do Postmark: %s", response)
             if response['ErrorCode'] != 0:
-                current_app.logger.error("Erro ao enviar email para %s: %s",
+                if hasattr(current_app, "logger"):
+                    current_app.logger.error("Erro ao enviar email para %s: %s",
                                          self.email, response['Message'])
                 return False
         else:
-            current_app.logger.debug("Mensagem que SERIA enviada")
-            current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
-            current_app.logger.debug("To: %s", self.email)
-            current_app.logger.debug("Subject: %s", subject)
-            current_app.logger.debug("", )
-            current_app.logger.debug("%s", body)
+            if hasattr(current_app, "logger"):
+                current_app.logger.debug("Mensagem que SERIA enviada")
+                current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
+                current_app.logger.debug("To: %s", self.email)
+                current_app.logger.debug("Subject: %s", subject)
+                current_app.logger.debug("", )
+                current_app.logger.debug("%s", body)
         return True

@@ -1,10 +1,12 @@
 from urllib.parse import urlsplit
+from uuid import UUID
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, Response, \
+    url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from moviedb import db
-from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, RegistrationForm, \
+from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, ProfileForm, RegistrationForm, \
     SetNewPasswordForm
 from moviedb.infra.tokens import create_jwt_token, verify_jwt_token
 from moviedb.models.autenticacao import normalizar_email, User
@@ -165,6 +167,20 @@ def valida_email(token):
 
 @bp.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
+    """
+    Exibe o formulário para redefinição de senha e processa a troca de senha do usuário.
+
+    - Usuários autenticados não podem acessar esta rota.
+    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a RESET_PASSWORD.
+    - Se o usuário existir e o token for válido, permite a redefinição da senha.
+    - Em caso de token inválido ou usuário inexistente, exibe mensagem de erro.
+
+    Args:
+        token (str): Token JWT enviado na URL para redefinição de senha.
+
+    Returns:
+        Response: Redireciona para a página de login ou inicial, conforme o caso.
+    """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
         return redirect(request.referrer if request.referrer else url_for('root.index'))
@@ -191,6 +207,21 @@ def reset_password(token):
 
 @bp.route('/new_password', methods=['GET', 'POST'])
 def new_password():
+    """
+    Exibe o formulário para solicitar redefinição de senha.
+
+    - Usuários autenticados não podem acessar esta rota.
+    - Se o formulário for enviado e validado, normaliza o email e verifica se existe
+      um usuário cadastrado com esse email.
+    - Sempre exibe uma mensagem informando que, se houver uma conta, um email será enviado.
+    - Se o usuário existir, gera um token JWT para redefinição de senha e envia um email
+      com instruções.
+    - Se o usuário não existir, registra um aviso no log.
+    - Renderiza o formulário caso não seja enviado ou validado.
+
+    Returns:
+        Response: Redireciona para a página de login ou renderiza o formulário.
+    """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
         return redirect(request.referrer if request.referrer else url_for('index'))
@@ -218,3 +249,78 @@ def new_password():
                            subtitle_card="Digite o seu email cadastrado no sistema para "
                                          "solicitar uma nova senha",
                            form=form)
+
+
+@bp.route('/<uuid:id_usuario>/imagem', methods=['GET'])
+@login_required
+def imagem(id_usuario):
+    """
+    Retorna a imagem do usuário autenticado.
+
+    - Apenas o próprio usuário pode acessar sua imagem.
+    - Retorna 404 se o usuário não for o dono, não existir ou não possuir foto.
+    - Utiliza o tipo MIME correto para a resposta.
+
+    Args:
+        id_usuario (UUID): Identificador único do usuário.
+
+    Returns:
+        Response: Imagem do usuário ou status 404 se não encontrada.
+    """
+    if str(current_user.id) != str(id_usuario):
+        return Response(status=404)
+    usuario = User.get_by_id(id_usuario)
+    if usuario is None or not usuario.com_foto:
+        return Response(status=404)
+    imagem_content, imagem_type = usuario.foto
+    return Response(imagem_content, mimetype=imagem_type)
+
+
+@bp.route('/', methods=['GET', 'POST'])
+@bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """
+    Exibe e processa o formulário de edição do perfil do usuário autenticado.
+
+    - Permite ao usuário alterar nome, email e foto.
+    - Apenas o próprio usuário pode acessar e modificar seus dados.
+    - Remove o botão de remover foto se o usuário não possui foto.
+    - Valida e processa o envio de nova foto ou remoção da existente.
+    - Salva alterações no banco de dados e exibe mensagens de sucesso ou erro.
+
+    Returns:
+        Response: Redireciona para a página inicial após alterações ou
+        renderiza o formulário de perfil.
+    """
+    form = ProfileForm()
+    # TODO: quando submete uma foto, ao recarregar o formulário ele não acrescente o botão de
+    #  remover a foto que outrora fora retirado
+    if not current_user.com_foto:
+        del form.remover_foto
+
+    if request.method == 'GET':
+        form.id.data = str(current_user.id)
+        form.nome.data = current_user.nome
+        form.email.data = current_user.email
+
+    if form.validate_on_submit():
+        current_user.nome = form.nome.data
+        if 'remover_foto' in form and form.remover_foto.data:
+            current_user.foto = None
+        elif form.foto_raw.data:
+            foto = request.files[form.foto_raw.name]
+            if foto:
+                current_user.foto = foto
+            else:
+                current_user.foto = None
+                flash("Problemas no envio da imagem", category='warning')
+        db.session.commit()
+        flash("Alterações efetuadas", category='success')
+        return redirect(url_for("root.index"))
+
+    return render_template(
+            'auth/profile.jinja2',
+            title="Perfil do usuário",
+            title_card="Alterando os seus dados pessoais",
+            form=form)
