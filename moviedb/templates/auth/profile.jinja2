@@ -43,7 +43,11 @@
 
 {% block footer %}
     <div class="row row-cols-lg-auto g-3 align-items-center py-2 px-5">
-        <div class="col">
+        <div class="col-12 form-check form-switch">
+            {{ form.usa_2fa.label(class="form-check-label", form="form") }}
+            {{ form.usa_2fa(class="form-check-input", form="form") }}
+        </div>
+        <div class="col ms-auto">
             {{ form.submit(class="btn btn-primary", form="form") }}
             {% if 'remover_foto' in form %}
                 {{ form.remover_foto(class="btn btn-secondary", form="form") }}

@@ -18,3 +18,12 @@ PyJWT==2.10.1
 # Para enviar email
 # https://postmarker.readthedocs.io/en/latest/
 postmarker==1.0
+# Para gerar códigos TOTP (Time-based One-Time Password)
+# https://pyauth.github.io/pyotp
+pyotp==2.9.0
+# Geração do QRCode usado no 2FA
+# https://github.com/lincolnloop/python-qrcode
+qrcode==8.2
+# Necessário para o qrcode
+# https://pillow.readthedocs.io/en/stable/
+Pillow==11.3.0

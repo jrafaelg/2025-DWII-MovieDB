@@ -1,0 +1,21 @@
+{% from 'bootstrap5/utils.html' import render_icon %}
+{% extends "layout.jinja2" %}
+{% block card_col %}col-xxl-4 col-xl-5 col-lg-5 col-md-7 col-sm-9{% endblock %}
+{% block content %}
+    <form id="form" action="" method="post" class="form" role="form" novalidate>
+        {{ form.csrf_token() }}
+        {{ form.codigo.label(class="visually-hidden") }}
+        <div class="input-group">
+            <div class="input-group-text">{{ render_icon("shield-lock") }}</div>
+            {% if form.codigo.errors -%}
+                {{ form.codigo(class="form-control is-invalid") }}
+            {%- else -%}
+                {{ form.codigo(class="form-control", placeholder="000000") }}
+            {%- endif %}
+        </div>
+    </form>
+{% endblock %}
+
+{% block footer %}
+    {{ form.submit(class="btn btn-primary", form="form") }}
+{% endblock %}

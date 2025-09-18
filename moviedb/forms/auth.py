@@ -3,17 +3,17 @@ from flask_login import current_user
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
 from wtforms.fields.simple import BooleanField, HiddenField, PasswordField, StringField, SubmitField
-from wtforms.validators import Email, EqualTo, InputRequired, Length
+from wtforms.validators import Email, EqualTo, InputRequired, Length, ValidationError
 
 
 class UniqueEmail(object):
     """
-    Validador WTForms para garantir que o email informado não
-    está cadastrado no sistema.
+    Validador WTForms para garantir que o email informado não está cadastrado no sistema.
 
     Args:
         message (str, opcional): Mensagem de erro personalizada.
     """
+
     def __init__(self, message=None):
         if not message:
             message = "Já existe um usuário com este email"
@@ -33,6 +33,7 @@ class UniqueEmail(object):
         from moviedb.models.autenticacao import User
         if User.get_by_email(field.data):
             raise ValidationError(self.message)
+
 
 class SenhaComplexa(object):
     """
@@ -96,12 +97,10 @@ class SenhaComplexa(object):
         return
 
 
-from wtforms.validators import ValidationError
-
-
 class DadosImutaveisDoUsuario:
     """
-    Validador WTForms para garantir que um campo não seja modificado por um usuário.
+    Validador WTForms para garantir que um campo não seja modificado pelo usuário no lado do
+    cliente.
 
     Este validador compara o valor do campo com o valor correspondente no
     objeto `current_user`. Se os valores forem diferentes, uma `ValidationError`
@@ -180,6 +179,7 @@ class RegistrationForm(FlaskForm):
                         EqualTo('password', message="As senhas não são iguais")])
     submit = SubmitField("Criar uma conta no sistema")
 
+
 class LoginForm(FlaskForm):
     email = StringField(
             label="Email",
@@ -232,6 +232,9 @@ class ProfileForm(FlaskForm):
             label="Email",
             validators=[DadosImutaveisDoUsuario('email')])
 
+    usa_2fa = BooleanField(
+            label="Ativar o segundo fator de autenticação")
+
     foto_raw = FileField(
             label="Foto de perfil",
             validators=[FileAllowed(upload_set=['jpg', 'jpeg', 'png'],
@@ -239,3 +242,14 @@ class ProfileForm(FlaskForm):
 
     submit = SubmitField("Efetuar as mudanças...")
     remover_foto = SubmitField("e remover foto")
+
+
+class Read2FACodeForm(FlaskForm):
+    codigo = StringField(
+            label="Código",
+            validators=[
+                InputRequired(message="Informe o código fornecido pelo aplicativo autenticador"),
+                Length(min=6, max=6)],
+            render_kw={'autocomplete': 'one-time-code',
+                       'pattern'     : r'^[A-Z0-9]{6}$'})
+    submit = SubmitField("Enviar código")

@@ -1,9 +1,15 @@
+import secrets
 import uuid
 from base64 import b64decode, b64encode
+from io import BytesIO
+from typing import Optional
 
+import pyotp
 from flask import current_app
 from flask_login import UserMixin
-from sqlalchemy import Boolean, Column, select, String, Text, Uuid
+from qrcode.main import QRCode
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, select, String, Text, Uuid
+from sqlalchemy.orm import relationship
 
 from moviedb import db
 from moviedb.models.mixins import BasicRepositoryMixin
@@ -37,11 +43,26 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     nome = Column(String(60), nullable=False)
     email_normalizado = Column(String(180), nullable=False, unique=True, index=True)
     password_hash = Column(String(256), nullable=False)
-    ativo = Column(Boolean, nullable=False, default=False)
+    ativo = Column(Boolean, nullable=False, default=False, server_default='false')
 
-    com_foto = Column(Boolean, default=False)
+    com_foto = Column(Boolean, default=False, server_default='false')
     foto_base64 = Column(Text, nullable=True, default=None)
     foto_mime = Column(String(32), nullable=True, default=None)
+
+    usa_2fa = Column(Boolean, default=False, server_default='false')
+    _otp_secret = Column(String(32), nullable=True, default=None)
+    ultimo_otp = Column(String(6), nullable=True, default=None)
+
+    # Relação ORM que representa os códigos de backup 2FA associados ao usuário.
+    # - `back_populates='usuario'`: Sincroniza a relação bidirecional com Backup2FA.
+    # - `lazy='select'`: Carrega os códigos de backup ao buscar o usuário.
+    # - `cascade='all, delete-orphan'`: Remove os códigos de backup ao excluir o usuário.
+    # - `passive_deletes=True`: Permite que o banco de dados gerencie a exclusão em cascata.
+    lista_2fa_backup = relationship('Backup2FA',
+                                    back_populates='usuario',
+                                    lazy='select',
+                                    cascade='all, delete-orphan',
+                                    passive_deletes=True)
 
     @property
     def email(self):
@@ -116,8 +137,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                 self.foto_base64 = None
                 self.foto_mime = None
                 # Registra o erro para depuração
-                if hasattr(current_app, "logger"):
-                    current_app.logger.error("Erro ao definir foto: %s", str(e))
+                current_app.logger.error("Erro ao definir foto: %s", str(e))
 
     def send_email(self, subject: str,
                    body: str) -> bool:
@@ -131,7 +151,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         Returns:
             True se conseguir enviar o e-mail, False caso contrário.
         """
-        if current_app.config.get('SEND_EMAIL'):
+        if current_app.config.get('SEND_EMAIL', False):
             from postmarker.core import PostmarkClient
             postmark = PostmarkClient(server_token=current_app.config['SERVER_TOKEN'])
             conteudo = postmark.emails.Email(
@@ -141,20 +161,173 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                     TextBody=body
             )
             response = conteudo.send()
-            if hasattr(current_app, "logger"):
-                current_app.logger.debug("Email enviado para %s", self.email)
-                current_app.logger.debug("Resposta do Postmark: %s", response)
+            current_app.logger.debug("Email enviado para %s", self.email)
+            current_app.logger.debug("Resposta do Postmark: %s", response)
             if response['ErrorCode'] != 0:
-                if hasattr(current_app, "logger"):
-                    current_app.logger.error("Erro ao enviar email para %s: %s",
-                                         self.email, response['Message'])
+                current_app.logger.error("Erro ao enviar email para %s: %s",
+                                         (self.email, response['Message']))
                 return False
         else:
-            if hasattr(current_app, "logger"):
-                current_app.logger.debug("Mensagem que SERIA enviada")
-                current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
-                current_app.logger.debug("To: %s", self.email)
-                current_app.logger.debug("Subject: %s", subject)
-                current_app.logger.debug("", )
-                current_app.logger.debug("%s", body)
+            current_app.logger.debug("Mensagem que SERIA enviada")
+            current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
+            current_app.logger.debug("To: %s", self.email)
+            current_app.logger.debug("Subject: %s", subject)
+            current_app.logger.debug("", )
+            current_app.logger.debug("%s", body)
         return True
+
+    @property
+    def otp_secret_formatted(self) -> str:
+        """
+        Retorna o segredo OTP do usuário em grupos de 4 caracteres
+
+        Returns:
+            str: segredo OTP formatado (XXXX ... XXXX)
+        """
+        return " ".join(self.otp_secret[i:i + 4] for i in range(0, len(self.otp_secret), 4))
+
+    @property
+    def b64encoded_qr_totp_uri(self) -> str:
+        """
+        Retorna imagem em base64 com o qr_code para a string de configuração do aplicativo de 2FA
+
+        Returns
+            str: representação da imagem do qr-code
+        """
+        qr = QRCode(version=1, box_size=10, border=5)
+        qr.add_data(self.totp_uri, optimize=0)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color='black', back_color='white')
+        buffer = BytesIO()
+        img.save(buffer)
+        return b64encode(buffer.getvalue()).decode('UTF-8')
+
+    @property
+    def totp_uri(self) -> str:
+        """
+        Retorna a string de configuração do aplicativo de 2FA
+
+        Returns:
+            str: string de configuração do aplicativo de 2FA no formato otpauth://TYPE/LABEL?PARAMETERS
+        """
+        otp = pyotp.totp.TOTP(self.otp_secret)
+        return otp.provisioning_uri(name=self.email,
+                                    issuer_name=current_app.config.get('APP_NAME'))
+
+    def verify_totp(self, token: str) -> bool:
+        totp = pyotp.TOTP(self.otp_secret)
+        return totp.verify(token, valid_window=1)
+
+
+    @property
+    def otp_secret(self):
+        return self._otp_secret
+
+    @otp_secret.setter
+    def otp_secret(self, value: Optional[str] = None):
+        if value is None:
+            value = pyotp.random_base32()
+        self._otp_secret = value
+
+    def verify_totp_backup(self, token) -> bool:
+        """
+        Verifica se o token fornecido corresponde a algum dos códigos de backup 2FA do usuário.
+
+        Args:
+            token (str): Código de backup a ser verificado.
+
+        Returns:
+            bool: True se o código for válido e removido, False caso contrário.
+        """
+        from werkzeug.security import check_password_hash
+        for codigo in self.lista_2fa_backup:
+            if check_password_hash(codigo.hash_codigo, token):
+                db.session.delete(codigo)
+                db.session.commit()
+                return True
+        return False
+
+    def generate_2fa_backup(self, quantos: int = 5) -> list[str]:
+        """
+        Gera códigos de backup para autenticação 2FA do usuário.
+
+        Remove todos os códigos de backup anteriores e cria novos códigos aleatórios,
+        armazenando-os de forma segura no banco de dados.
+
+        Args:
+            quantos (int): Quantidade de códigos de backup a serem gerados. Padrão: 5.
+
+        Returns:
+            list[str]: Lista dos códigos de backup gerados.
+        """
+        from werkzeug.security import generate_password_hash
+        # Remove os códigos anteriores
+        for codigo in self.lista_2fa_backup:
+            db.session.delete(codigo)
+        # Gera novos códigos
+        codigos = []
+        for _ in range(quantos):
+            codigo = "".join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
+            codigos.append(codigo)
+            backup2fa = Backup2FA()
+            backup2fa.hash_codigo = generate_password_hash(codigo)
+            self.lista_2fa_backup.append(backup2fa)
+        db.session.commit()
+        return codigos
+
+    def enable_2fa(self, otp_secret: str = None,
+                   ultimo_otp: str = "",
+                   generate_backup: bool = False,
+                   back_codes: int = 0) -> Optional[list[str]]:
+        """
+        Ativa o 2FA para o usuário, configurando o segredo OTP, o último OTP e, opcionalmente, gerando códigos de backup.
+
+        Args:
+            otp_secret (str): Segredo OTP para ativação do 2FA. Obrigatório.
+            ultimo_otp (str): Último código OTP utilizado. Se não informado, será gerado automaticamente.
+            generate_backup (bool): Se True, gera códigos de backup.
+            back_codes (int): Quantidade de códigos de backup a serem gerados.
+
+        Returns:
+            Optional[list[str]]: Lista de códigos de backup gerados, se solicitado.
+
+        Raises
+            ValueError: Se o otp_secret não for fornecido.
+        """
+        if otp_secret is None:
+            raise ValueError("Obrigatório informar o OTP Secret para ativar o 2FA")
+        self.otp_secret = otp_secret
+        self.usa_2fa = True
+        self.ultimo_otp = ultimo_otp if ultimo_otp is not None else pyotp.TOTP(otp_secret).now()
+        if generate_backup and back_codes > 0:
+            return self.generate_2fa_backup(back_codes)
+
+    def disable_2fa(self) -> bool:
+        """
+        Desativa o 2FA para o usuário
+
+        Remove o segredo OTP, o último OTP e todos os códigos de backup.
+        Realiza a exclusão dos códigos de backup associados ao usuário e atualiza o banco de dados.
+
+        Returns:
+            bool: True se a operação foi concluída com sucesso.
+        """
+        self.usa_2fa = False
+        self._otp_secret = None
+        self.ultimo_otp = None
+        for codigo in self.lista_2fa_backup:
+            db.session.delete(codigo)
+        db.session.commit()
+        return True
+
+
+class Backup2FA(db.Model):
+    __tablename__ = 'backup2fa'
+
+    id = Column(Integer, primary_key=True)
+    hash_codigo = Column(String(256), nullable=False)
+    usuario_id = Column(Uuid(as_uuid=True), ForeignKey('usuarios.id'))
+
+    # Relação ORM para acessar o usuário associado a este código de backup 2FA.
+    # back_populates garante sincronização bidirecional com User.lista_2fa_backup.
+    usuario = relationship('User', back_populates='lista_2fa_backup')

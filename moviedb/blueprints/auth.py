@@ -2,11 +2,13 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from flask import Blueprint, current_app, flash, redirect, render_template, request, Response, \
-    url_for
+    session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from markupsafe import Markup
 
 from moviedb import db
-from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, ProfileForm, RegistrationForm, \
+from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, ProfileForm, Read2FACodeForm, \
+    RegistrationForm, \
     SetNewPasswordForm
 from moviedb.infra.tokens import create_jwt_token, verify_jwt_token
 from moviedb.models.autenticacao import normalizar_email, User
@@ -34,7 +36,7 @@ def register():
     """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('index'))
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = RegistrationForm()
     if form.validate_on_submit():
@@ -72,8 +74,9 @@ def login():
 
     - Usuários já autenticados não podem acessar esta rota.
     - Se o formulário for enviado e validado, verifica as credenciais do usuário.
-    - Se o usuário existir, estiver ativo e a senha estiver correta, realiza o login.
-    - Redireciona para a página desejada ou para a página inicial.
+    - Se o usuário existir, estiver ativo e a senha estiver correta, ou encaminha
+      para a página de 2FA, ou realiza o login conforme o caso.
+    - Se efetuar o login sem 2FA, redireciona para a página desejada ou para a página inicial.
     - Caso contrário, exibe mensagens de erro e permanece na página de login.
 
     Returns:
@@ -81,7 +84,7 @@ def login():
     """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('index'))
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = LoginForm()
 
@@ -95,9 +98,28 @@ def login():
             flash("Usuário está impedido de acessar o sistema. Procure um adminstrador",
                   category='danger')
             return redirect(url_for('auth.login'))
+        if usuario.usa_2fa:
+            # CRITICO: Token indicando que a verificação da senha está feita, mas o 2FA
+            #  ainda não. Necessário para proteger a rota /get2fa.
+            session['pending_2fa_token'] = (
+                create_jwt_token(action=JWT_action.PENDING_2FA,
+                                 sub=usuario.id,
+                                 expires_in=current_app.config.get('2FA_SESSION_TIMEOUT', -1),
+                                 extra_data={
+                                     'remember_me': bool(form.remember_me.data),
+                                     'next'       : request.args.get('next')
+                                 })
+            )
+            current_app.logger.debug("pending_2fa_token: %s", session['pending_2fa_token'])
+            flash("Conclua o login digitando o código do segundo fator de autenticação",
+                  category='info')
+            return redirect(url_for('auth.get2fa'))
+
         login_user(usuario, remember=form.remember_me.data)
         db.session.commit()
         flash(f"Usuario {usuario.email} logado", category='success')
+        current_app.logger.debug("Usuário %s logado", usuario.email)
+
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
             next_page = url_for('root.index')
@@ -105,6 +127,84 @@ def login():
 
     return render_template('auth/login.jinja2',
                            title="Login",
+                           form=form)
+
+
+@bp.route('/get2fa', methods=['GET', 'POST'])
+def get2fa():
+    """
+    Exibe e processa o formulário de segundo fator de autenticação (2FA).
+
+    - Usuários já autenticados não podem acessar esta rota.
+    - Verifica se a sessão contém informações de usuário pendente de 2FA.
+    - Implementa expiração da sessão de 2FA baseada em tempo (opcional).
+    - Valida o código 2FA informado pelo usuário (TOTP ou código reserva).
+    - Finaliza o login se o código estiver correto, ou exibe mensagem de erro.
+    - Limpa variáveis de sessão após sucesso ou falha.
+
+    Returns:
+        Response: Redireciona para a página desejada após login ou renderiza o formulário de 2FA.
+    """
+    if current_user.is_authenticated:
+        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
+
+    # CRITICO: Verifica se a variável de sessão que indica que a senha foi validada
+    #  está presente. Se não estiver, redireciona para a página de login.
+    pending_2fa_token = session.get('pending_2fa_token')
+    if not pending_2fa_token:
+        current_app.logger.warning("Tentativa de acesso 2FA não autorizado a partir do IP %s",
+                                   request.remote_addr)
+        flash("Acesso negado. Reinicie o processo de login.", category='error')
+        return redirect(url_for('auth.login'))
+
+    dados_token = verify_jwt_token(pending_2fa_token)
+    if not dados_token.get('valid', False) or \
+            dados_token.get('action') != JWT_action.PENDING_2FA or \
+            not dados_token.get('extra_data', False):
+        session.pop('pending_2fa_token', None)
+        current_app.logger.warning("Tentativa de acesso 2FA com token inválido ou expirado a partir do IP %s",
+                                   request.remote_addr)
+        flash("Sessão de autenticação inválida ou expirada. Refaça o login.", category='warning')
+        return redirect(url_for('auth.login'))
+
+    user_id = dados_token.get('sub')
+    remember_me = dados_token.get('extra_data').get('remember_me', False)
+    next_page = dados_token.get('extra_data').get('next', None)
+
+    form = Read2FACodeForm()
+    if form.validate_on_submit():
+        usuario = User.get_by_id(user_id)
+        if usuario is None or not usuario.usa_2fa:
+            # Limpa variáveis de sessão e volta para o login
+            session.pop('pending_2fa_token', None)
+            return redirect(url_for('auth.login'))
+
+        token = str(form.codigo.data)
+        if usuario.verify_totp(token) or usuario.verify_totp_backup(token):
+            # Limpa variáveis de sessão e finaliza login
+            session.pop('pending_2fa_token', None)
+            login_user(usuario, remember=remember_me)
+            usuario.ultimo_otp = token
+            db.session.commit()
+
+            if not next_page or urlsplit(next_page).netloc != '':
+                next_page = url_for('root.index')
+
+            flash(f"Usuario {usuario.email} logado", category='success')
+            return redirect(next_page)
+
+        # Código errado. Registra tentativa falha e permanece na página de 2FA
+        current_app.logger.warning("Tentativa falha de 2FA para usuario %s a partir do IP %s",
+                                   (usuario.id, request.remote_addr))
+        flash("Código incorreto. Tente novamente", category='warning')
+
+    return render_template('auth/2fa.jinja2',
+                           title="Login",
+                           title_card="Segundo fator de autenticação",
+                           subtitle_card="Digite o código do segundo fator de autenticação que "
+                                         "aparece no seu aplicativo autenticador, ou um dos seus "
+                                         "códigos reserva",
                            form=form)
 
 
@@ -129,14 +229,12 @@ def logout():
 @bp.route('/valida_email/<token>')
 def valida_email(token):
     """
-    Valida o email do usuário a partir de um token JWT.
+    Valida o email do usuário a partir de um token JWT enviado na URL.
 
     - Usuários autenticados não podem acessar esta rota.
-    - O token é verificado e deve conter as claims 'sub' (email) e 'action' igual a
-    'validate_email'.
-    - Se o usuário existir, estiver inativo e o token for válido, ativa o usuário e exibe
-    mensagem de sucesso.
-    - Em caso de token inválido ou usuário já ativo, exibe mensagem de erro.
+    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a VALIDAR_EMAIL.
+    - Se o usuário existir, não estiver ativo e o token for válido, ativa o usuário.
+    - Exibe mensagens de sucesso ou erro conforme o caso.
 
     Args:
         token (str): Token JWT enviado na URL para validação do email.
@@ -171,7 +269,8 @@ def reset_password(token):
     Exibe o formulário para redefinição de senha e processa a troca de senha do usuário.
 
     - Usuários autenticados não podem acessar esta rota.
-    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a RESET_PASSWORD.
+    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a
+    RESET_PASSWORD.
     - Se o usuário existir e o token for válido, permite a redefinição da senha.
     - Em caso de token inválido ou usuário inexistente, exibe mensagem de erro.
 
@@ -224,7 +323,7 @@ def new_password():
     """
     if current_user.is_authenticated:
         flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('index'))
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = AskToResetPasswordForm()
     if form.validate_on_submit():
@@ -287,6 +386,7 @@ def profile():
     - Apenas o próprio usuário pode acessar e modificar seus dados.
     - Remove o botão de remover foto se o usuário não possui foto.
     - Valida e processa o envio de nova foto ou remoção da existente.
+    - Ativa ou desativa o 2FA conforme a escolha do usuário.
     - Salva alterações no banco de dados e exibe mensagens de sucesso ou erro.
 
     Returns:
@@ -303,6 +403,7 @@ def profile():
         form.id.data = str(current_user.id)
         form.nome.data = current_user.nome
         form.email.data = current_user.email
+        form.usa_2fa.data = current_user.usa_2fa
 
     if form.validate_on_submit():
         current_user.nome = form.nome.data
@@ -315,6 +416,17 @@ def profile():
             else:
                 current_user.foto = None
                 flash("Problemas no envio da imagem", category='warning')
+        if form.usa_2fa.data:
+            if not current_user.usa_2fa:
+                current_user.otp_secret = None  # Garante que um novo segredo será gerado
+                db.session.commit()
+                flash("Alterações efetuadas. Conclua a ativação do segundo fator de "
+                      "autenticação", category='info')
+                return redirect(url_for('auth.enable_2fa'))
+        else:
+            if current_user.usa_2fa:
+                if current_user.disable_2fa():
+                    flash("Segundo fator de autenticação desativado", category='success')
         db.session.commit()
         flash("Alterações efetuadas", category='success')
         return redirect(url_for("root.index"))
@@ -324,3 +436,54 @@ def profile():
             title="Perfil do usuário",
             title_card="Alterando os seus dados pessoais",
             form=form)
+
+
+@bp.route('enable_2fa', methods=['GET', 'POST'])
+@login_required
+def enable_2fa():
+    """
+    Ativa o segundo fator de autenticação (2FA) para o usuário autenticado.
+
+    - Se o usuário já possui 2FA ativado, exibe mensagem informativa e redireciona para o perfil.
+    - Exibe o formulário para digitar o código TOTP gerado pelo autenticador.
+    - Se o código for válido, ativa o 2FA, gera códigos de backup e exibe-os ao usuário.
+    - Se o código for inválido, exibe mensagem de erro e redireciona para a página de ativação.
+    - Renderiza o formulário de ativação do 2FA caso não seja enviado ou validado.
+
+    Returns:
+        Response: Renderiza o formulário de ativação do 2FA ou exibe os códigos de backup.
+    """
+    if current_user.usa_2fa:
+        flash("Configuração já efetuada. Para alterar, desative e reative o uso do "
+              "segundo fator de autenticação", category='info')
+        return redirect(url_for('auth.profile'))
+
+    form = Read2FACodeForm()
+    if request.method == 'POST' and form.validate():
+        if current_user.verify_totp(form.codigo.data):
+            codigos = current_user.enable_2fa(otp_secret=current_user.otp_secret,
+                                              ultimo_otp=form.codigo.data,
+                                              generate_backup=True,
+                                              back_codes=10)
+            db.session.commit()
+            flash("Segundo fator de autenticação ativado", category='success')
+            subtitle_card = ("<p>Guarde com cuidado os códigos abaixo. Eles podem ser usados "
+                             "para confirmação da autenticação de dois fatores quando você não "
+                             "tiver o seu autenticador disponível.</p>"
+                             "<p><strong>Eles serão mostrados apenas esta vez!</strong></p>")
+
+            return render_template('auth/show_2fa_backup.jinja2',
+                                   codigos=codigos,
+                                   title="Códigos reserva",
+                                   title_card="Códigos reserva para segundo fator de autenticação",
+                                   subtitle_card=Markup(subtitle_card))
+        # Código errado
+        flash("O código informado está incorreto. Tente novamente.", category='warning')
+        return redirect(url_for('user.enable_2fa'))
+
+    return render_template('auth/enable_2fa.jinja2',
+                           title="Ativação do 2FA",
+                           title_card="Ativação do segundo fator de autenticação",
+                           form=form,
+                           imagem=current_user.b64encoded_qr_totp_uri,
+                           token=current_user.otp_secret_formatted)
