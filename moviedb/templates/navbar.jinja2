@@ -40,7 +40,13 @@
                             {% if current_user.is_anonymous %}
                                 <span class="fw-semibold">Acesso ao sistema</span>
                             {% else %}
-                                <span class="fw-semibold">{{ current_user.email }}</span>
+                                {% if current_user.com_foto %}
+                                    <img src="{{ url_for('auth.avatar', id_usuario=current_user.id) }}"
+                                         class="rounded-circle me-2 align-middle"
+                                         alt="Avatar do usuário"/>
+                                {% else %}
+                                    <span class="fw-semibold">{{ current_user.email }}</span>
+                                {% endif %}
                             {% endif %}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-lg-end">

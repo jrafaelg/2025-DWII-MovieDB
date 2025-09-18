@@ -1,3 +1,4 @@
+import io
 import secrets
 import uuid
 from base64 import b64decode, b64encode
@@ -7,6 +8,7 @@ from typing import Optional
 import pyotp
 from flask import current_app
 from flask_login import UserMixin
+from PIL import Image
 from qrcode.main import QRCode
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, select, String, Text, Uuid
 from sqlalchemy.orm import relationship
@@ -47,6 +49,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     com_foto = Column(Boolean, default=False, server_default='false')
     foto_base64 = Column(Text, nullable=True, default=None)
+    avatar_base64 = Column(Text, nullable=True, default=None)
     foto_mime = Column(String(32), nullable=True, default=None)
 
     usa_2fa = Column(Boolean, default=False, server_default='false')
@@ -109,10 +112,20 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             mime_type = None
         return data, mime_type
 
+    @property
+    def avatar(self) -> (bytes, str):
+        if self.com_foto:
+            data = b64decode(self.avatar_base64)
+            mime_type = self.foto_mime
+        else:
+            data = None
+            mime_type = None
+        return data, mime_type
+
     @foto.setter
     def foto(self, value):
         """
-        Setter para a foto do usuário.
+        Setter para a foto/avatar do usuário.
 
         Atualiza os campos relacionados à foto do usuário. Se o valor for None,
         remove a foto e limpa os campos associados. Caso contrário, tenta armazenar
@@ -123,21 +136,70 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             value: Um arquivo com métodos `read()` e atributo `mimetype`, ou None.
         """
         if value is None:
-            self.com_foto = False
-            self.foto_base64 = None
-            self.foto_mime = None
-        else:
-            try:
-                self.com_foto = True
-                self.foto_base64 = b64encode(value.read()).decode('utf-8')
+            self._clear_photo_data()
+            return
+
+        try:
+            foto_data = value.read()
+            if not foto_data:
+                raise ValueError("Arquivo de imagem vazio")
+
+            # Valida e processa a imagem
+            with Image.open(io.BytesIO(foto_data)) as imagem:
+                # Validações básicas
+                if not hasattr(imagem, 'format') or imagem.format is None:
+                    raise ValueError("Formato de imagem não reconhecido")
+
+                # Armazena dados da imagem original (sem conversão)
+                self.foto_base64 = b64encode(foto_data).decode('utf-8')
                 self.foto_mime = value.mimetype
-            except AttributeError as e:
-                # value não possui read() ou mimetype
-                self.com_foto = False
-                self.foto_base64 = None
-                self.foto_mime = None
-                # Registra o erro para depuração
-                current_app.logger.error("Erro ao definir foto: %s", str(e))
+                self.com_foto = True
+
+                # Gera avatar redimensionado no formato original
+                self._generate_avatar(imagem)
+
+        except (AttributeError, OSError, ValueError) as e:
+            self._clear_photo_data()
+            error_msg = f"Erro ao processar foto do usuário: {str(e)}"
+            current_app.logger.error(error_msg)
+            raise ValueError(error_msg) from e
+
+    def _clear_photo_data(self):
+        """Limpa todos os dados relacionados à foto."""
+        self.com_foto = False
+        self.foto_base64 = None
+        self.avatar_base64 = None
+
+    def _generate_avatar(self, imagem):
+        """
+        Gera o avatar redimensionado a partir da imagem fornecida, preservando o formato original.
+
+        Args:
+            imagem: Objeto PIL Image já aberto e validado.
+        """
+        size = current_app.config.get('AVATAR_SIZE', 32)
+        largura, altura = imagem.size
+        formato_original = imagem.format
+
+        # Otimização: pula redimensionamento se já está no tamanho adequado
+        if max(largura, altura) <= size:
+            buffer_avatar = io.BytesIO()
+            imagem.save(buffer_avatar, format=formato_original, optimize=True)
+        else:
+            # Calcula novo tamanho mantendo proporção
+            fator_escala = min(size / largura, size / altura)
+            novo_tamanho = (
+                int(largura * fator_escala),
+                int(altura * fator_escala)
+            )
+
+            # Redimensiona usando o metodo thumbnail (modifica in-place)
+            imagem.thumbnail(novo_tamanho, Image.Resampling.LANCZOS)
+
+            buffer_avatar = io.BytesIO()
+            imagem.save(buffer_avatar, format=formato_original, optimize=True)
+
+        self.avatar_base64 = b64encode(buffer_avatar.getvalue()).decode('utf-8')
 
     def send_email(self, subject: str,
                    body: str) -> bool:

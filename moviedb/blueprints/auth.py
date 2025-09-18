@@ -423,6 +423,31 @@ def imagem(id_usuario):
     return Response(imagem_content, mimetype=imagem_type)
 
 
+@bp.route('/<uuid:id_usuario>/avatar', methods=['GET'])
+@login_required
+def avatar(id_usuario):
+    """
+    Retorna o avatar do usuário autenticado.
+
+    - Apenas o próprio usuário pode acessar sua imagem.
+    - Retorna 404 se o usuário não for o dono, não existir ou não possuir foto.
+    - Utiliza o tipo MIME correto para a resposta.
+
+    Args:
+        id_usuario (UUID): Identificador único do usuário.
+
+    Returns:
+        Response: Imagem do usuário ou status 404 se não encontrada.
+    """
+    if str(current_user.id) != str(id_usuario):
+        return Response(status=404)
+    usuario = User.get_by_id(id_usuario)
+    if usuario is None or not usuario.com_foto:
+        return Response(status=404)
+    imagem_content, imagem_type = usuario.avatar
+    return Response(imagem_content, mimetype=imagem_type)
+
+
 @bp.route('/', methods=['GET', 'POST'])
 @bp.route('/profile', methods=['GET', 'POST'])
 @login_required
