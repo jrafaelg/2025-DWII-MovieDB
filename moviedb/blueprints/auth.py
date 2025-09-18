@@ -6,7 +6,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from flask_login import current_user, login_required, login_user, logout_user
 from markupsafe import Markup
 
-from moviedb import db
+from moviedb import anonymous_required, db
 from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, ProfileForm, Read2FACodeForm, \
     RegistrationForm, \
     SetNewPasswordForm
@@ -20,6 +20,7 @@ bp = Blueprint(name='auth',
 
 
 @bp.route('/register', methods=['GET', 'POST'])
+@anonymous_required
 def register():
     """
     Exibe o formulário de registro de usuário e processa o cadastro.
@@ -34,9 +35,6 @@ def register():
     Returns:
         Response: Redireciona ou renderiza o template de registro.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = RegistrationForm()
     if form.validate_on_submit():
@@ -67,6 +65,7 @@ def register():
                            form=form)
 
 @bp.route('/revalida_email/<uuid:user_id>')
+@anonymous_required
 def revalida_email(user_id):
     """
     Reenvia o email de validação para o usuário com o ID fornecido.
@@ -82,9 +81,6 @@ def revalida_email(user_id):
     Returns:
         Response: Redireciona para a página de login.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     try:
         uuid_obj = UUID(str(user_id))
@@ -114,6 +110,7 @@ def revalida_email(user_id):
 
 
 @bp.route('/login', methods=['GET', 'POST'])
+@anonymous_required
 def login():
     """
     Exibe o formulário de login e processa a autenticação do usuário.
@@ -128,9 +125,6 @@ def login():
     Returns:
         Response: Redireciona ou renderiza o template de login.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = LoginForm()
 
@@ -179,6 +173,7 @@ def login():
 
 
 @bp.route('/get2fa', methods=['GET', 'POST'])
+@anonymous_required
 def get2fa():
     """
     Exibe e processa o formulário de segundo fator de autenticação (2FA).
@@ -193,9 +188,6 @@ def get2fa():
     Returns:
         Response: Redireciona para a página desejada após login ou renderiza o formulário de 2FA.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     # CRITICO: Verifica se a variável de sessão que indica que a senha foi validada
     #  está presente. Se não estiver, redireciona para a página de login.
@@ -280,6 +272,7 @@ def logout():
 
 
 @bp.route('/valida_email/<token>')
+@anonymous_required
 def valida_email(token):
     """
     Valida o email do usuário a partir de um token JWT enviado na URL.
@@ -295,9 +288,6 @@ def valida_email(token):
     Returns:
         Response: Redireciona para a página de login ou inicial, conforme o caso.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     claims = verify_jwt_token(token)
     if not (claims.get('valid', False) and {'sub', 'action'}.issubset(claims)):
@@ -317,6 +307,7 @@ def valida_email(token):
 
 
 @bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+@anonymous_required
 def reset_password(token):
     """
     Exibe o formulário para redefinição de senha e processa a troca de senha do usuário.
@@ -333,10 +324,6 @@ def reset_password(token):
     Returns:
         Response: Redireciona para a página de login ou inicial, conforme o caso.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
-
     claims = verify_jwt_token(token)
     if not (claims.get('valid', False) and {'sub', 'action'}.issubset(claims)):
         flash("Token incorreto ou incompleto", category='warning')
@@ -358,6 +345,7 @@ def reset_password(token):
 
 
 @bp.route('/new_password', methods=['GET', 'POST'])
+@anonymous_required
 def new_password():
     """
     Exibe o formulário para solicitar redefinição de senha.
@@ -374,9 +362,6 @@ def new_password():
     Returns:
         Response: Redireciona para a página de login ou renderiza o formulário.
     """
-    if current_user.is_authenticated:
-        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
-        return redirect(request.referrer if request.referrer else url_for('root.index'))
 
     form = AskToResetPasswordForm()
     if form.validate_on_submit():

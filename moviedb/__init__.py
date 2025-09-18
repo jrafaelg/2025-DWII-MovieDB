@@ -3,11 +3,25 @@ import json
 import logging
 import os
 import sys
+from functools import wraps
 
 from flask import Flask
 
 from moviedb.infra import app_logging
 from moviedb.infra.modulos import bootstrap, db, login_manager, migrate
+
+
+def anonymous_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from flask_login import current_user
+        from flask import redirect, url_for, flash
+        if current_user.is_authenticated:
+            flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+            return redirect(url_for('root.index'))
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 
 def create_app(config_filename: str = 'config.dev.json') -> Flask:

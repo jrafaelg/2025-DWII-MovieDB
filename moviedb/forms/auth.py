@@ -138,8 +138,7 @@ class DadosImutaveisDoUsuario:
             field: O campo a ser verificado.
 
         Raises:
-            ValidationError: Se o usuário não estiver autenticado ou se o valor
-            do campo for diferente do valor esperado.
+            ValidationError: se o valor do campo for diferente do valor esperado.
         """
         if not current_user.is_authenticated:
             raise ValidationError("Usuário não autenticado")
