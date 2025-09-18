@@ -57,10 +57,10 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     ultimo_otp = Column(String(6), nullable=True, default=None)
 
     # Relação ORM que representa os códigos de backup 2FA associados ao usuário.
-    # - `back_populates='usuario'`: Sincroniza a relação bidirecional com Backup2FA.
-    # - `lazy='select'`: Carrega os códigos de backup ao buscar o usuário.
-    # - `cascade='all, delete-orphan'`: Remove os códigos de backup ao excluir o usuário.
-    # - `passive_deletes=True`: Permite que o banco de dados gerencie a exclusão em cascata.
+    # - `back_populates='usuario'`: sincroniza a relação bidirecional com Backup2FA.
+    # - `lazy='select'`: carrega os códigos de backup ao buscar o usuário.
+    # - `cascade='all, delete-orphan'`: remove os códigos de backup ao excluir o usuário.
+    # - `passive_deletes=True`: permite que o banco de dados gerencie a exclusão em cascata.
     lista_2fa_backup = relationship('Backup2FA',
                                     back_populates='usuario',
                                     lazy='select',
@@ -133,7 +133,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         métodos/atributos esperados, registrando o erro.
 
         Args:
-            value: Um arquivo com métodos `read()` e atributo `mimetype`, ou None.
+            value: um objeto com métodos `read()` e atributo `mimetype`, ou None.
         """
         if value is None:
             self._clear_photo_data()
@@ -175,7 +175,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         Gera o avatar redimensionado a partir da imagem fornecida, preservando o formato original.
 
         Args:
-            imagem: Objeto PIL Image já aberto e validado.
+            imagem: objeto PIL Image já aberto e validado.
         """
         size = current_app.config.get('AVATAR_SIZE', 32)
         largura, altura = imagem.size
@@ -270,16 +270,12 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         Retorna a string de configuração do aplicativo de 2FA
 
         Returns:
-            str: string de configuração do aplicativo de 2FA no formato otpauth://TYPE/LABEL?PARAMETERS
+            str: string de configuração do aplicativo de 2FA no formato
+            otpauth://TYPE/LABEL?PARAMETERS
         """
         otp = pyotp.totp.TOTP(self.otp_secret)
         return otp.provisioning_uri(name=self.email,
                                     issuer_name=current_app.config.get('APP_NAME'))
-
-    def verify_totp(self, token: str) -> bool:
-        totp = pyotp.TOTP(self.otp_secret)
-        return totp.verify(token, valid_window=1)
-
 
     @property
     def otp_secret(self):
@@ -291,7 +287,35 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             value = pyotp.random_base32()
         self._otp_secret = value
 
+    def verify_totp(self, token) -> bool:
+        """
+        DESCONTINUADO: Este método será removido em versões futuras.
+
+        Use verify_2fa_code() no lugar.
+        """
+        import warnings
+        warnings.warn("verify_totp está descontinuado e será removido em versões futuras. "
+                      "Use verify_2fa_code() para verificação unificada de códigos 2FA",
+                      DeprecationWarning, stacklevel=2)
+        return self._verify_totp(token)
+
+    def _verify_totp(self, token: str) -> bool:
+        totp = pyotp.TOTP(self.otp_secret)
+        return totp.verify(token, valid_window=1)
+
     def verify_totp_backup(self, token) -> bool:
+        """
+        DESCONTINUADO: Este método será removido em versões futuras.
+
+        Use verify_2fa_code() no lugar.
+        """
+        import warnings
+        warnings.warn("verify_totp_backup está descontinuado e será removido em versões futuras. "
+                      "Use verify_2fa_code() para verificação unificada de códigos 2FA",
+                      DeprecationWarning, stacklevel=2)
+        return self._verify_totp(token)
+
+    def _verify_totp_backup(self, token) -> bool:
         """
         Verifica se o token fornecido corresponde a algum dos códigos de backup 2FA do usuário.
 
@@ -309,6 +333,31 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                 return True
         return False
 
+    def verify_2fa_code(self, token, totp_only: bool = False) -> tuple[bool, str]:
+        """
+        Verifica código 2FA e retorna resultado com tipo de autenticação usado.
+
+        Args:
+            token (str): Código 2FA a ser verificado.
+            totp_only (bool): Se True, não tenta verificar códigos de backup. Padrão: False.
+
+        Returns:
+            tuple[bool, str]: (success, auth_method) onde auth_method é 'totp' ou 'backup'
+        """
+        # Tenta TOTP primeiro
+        if self._verify_totp(token):
+            return True, 'totp'
+
+        # Se totp_only=True, não verifica backup codes (usado durante ativação)
+        if totp_only:
+            return False, 'invalid'
+
+        # Tenta códigos de backup
+        if self.usa_2fa and self._verify_totp_backup(token):
+            return True, 'backup'
+
+        return False, 'invalido'
+
     def generate_2fa_backup(self, quantos: int = 5) -> list[str]:
         """
         Gera códigos de backup para autenticação 2FA do usuário.
@@ -320,7 +369,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             quantos (int): Quantidade de códigos de backup a serem gerados. Padrão: 5.
 
         Returns:
-            list[str]: Lista dos códigos de backup gerados.
+            list[str]: lista dos códigos de backup gerados.
         """
         from werkzeug.security import generate_password_hash
         # Remove os códigos anteriores
@@ -342,16 +391,17 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                    generate_backup: bool = False,
                    back_codes: int = 0) -> Optional[list[str]]:
         """
-        Ativa o 2FA para o usuário, configurando o segredo OTP, o último OTP e, opcionalmente, gerando códigos de backup.
+        Ativa o 2FA para o usuário, configurando o segredo OTP, o último OTP e, opcionalmente,
+        gerando códigos de backup.
 
         Args:
-            otp_secret (str): Segredo OTP para ativação do 2FA. Obrigatório.
-            ultimo_otp (str): Último código OTP utilizado. Se não informado, será gerado automaticamente.
-            generate_backup (bool): Se True, gera códigos de backup.
-            back_codes (int): Quantidade de códigos de backup a serem gerados.
+            otp_secret (str): segredo OTP para ativação do 2FA. Obrigatório.
+            ultimo_otp (str): último código OTP utilizado.
+            generate_backup (bool): se True, gera códigos de backup.
+            back_codes (int): quantidade de códigos de backup a serem gerados.
 
         Returns:
-            Optional[list[str]]: Lista de códigos de backup gerados, se solicitado.
+            Optional[list[str]]: lista de códigos de backup gerados, se solicitado.
 
         Raises
             ValueError: Se o otp_secret não for fornecido.
@@ -391,5 +441,5 @@ class Backup2FA(db.Model):
     usuario_id = Column(Uuid(as_uuid=True), ForeignKey('usuarios.id'))
 
     # Relação ORM para acessar o usuário associado a este código de backup 2FA.
-    # back_populates garante sincronização bidirecional com User.lista_2fa_backup.
+    # `back_populates` garante sincronização bidirecional com User.lista_2fa_backup.
     usuario = relationship('User', back_populates='lista_2fa_backup')

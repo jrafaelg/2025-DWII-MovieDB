@@ -15,7 +15,7 @@ Todos os commits neste projeto devem seguir o seguinte formato:
 - **fix**: Correção de um bug.
 - **docs**: Alterações apenas na documentação.
 - **style**: Mudanças de formatação ou estilo que **não** afetam o funcionamento do código  
-  (ex.: espaçamento, vírgulas, ponto e vírgula, identação).
+  (ex.: espaçamento, vírgulas, ponto e vírgula, indentação).
 - **refactor**: Alterações no código que **não corrigem bugs** nem **adicionam funcionalidades**  
   (ex.: melhoria na organização do código).
 - **perf**: Mudanças que melhoram o desempenho.

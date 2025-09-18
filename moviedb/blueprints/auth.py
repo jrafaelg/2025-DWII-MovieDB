@@ -229,7 +229,8 @@ def get2fa():
             return redirect(url_for('auth.login'))
 
         token = str(form.codigo.data)
-        if usuario.verify_totp(token) or usuario.verify_totp_backup(token):
+        resultado, metodo = usuario.verify_2fa_code(token)
+        if resultado:
             # Limpa variáveis de sessão e finaliza login
             session.pop('pending_2fa_token', None)
             login_user(usuario, remember=remember_me)
@@ -240,6 +241,10 @@ def get2fa():
                 next_page = url_for('root.index')
 
             flash(f"Usuario {usuario.email} logado", category='success')
+            if metodo == 'backup':
+                flash(Markup("Você usou um código reserva para autenticação. "
+                             "Considere gerar novos códigos reserva na sua página de perfil."),
+                      category='warning')
             return redirect(next_page)
 
         # Código errado. Registra tentativa falha e permanece na página de 2FA
@@ -533,7 +538,8 @@ def enable_2fa():
 
     form = Read2FACodeForm()
     if request.method == 'POST' and form.validate():
-        if current_user.verify_totp(form.codigo.data):
+        resultado, _ = current_user.verify_2fa_code(form.codigo.data, totp_only=True)
+        if resultado:
             codigos = current_user.enable_2fa(otp_secret=current_user.otp_secret,
                                               ultimo_otp=form.codigo.data,
                                               generate_backup=True,
@@ -552,7 +558,7 @@ def enable_2fa():
                                    subtitle_card=Markup(subtitle_card))
         # Código errado
         flash("O código informado está incorreto. Tente novamente.", category='warning')
-        return redirect(url_for('user.enable_2fa'))
+        return redirect(url_for('auth.enable_2fa'))
 
     return render_template('auth/enable_2fa.jinja2',
                            title="Ativação do 2FA",
