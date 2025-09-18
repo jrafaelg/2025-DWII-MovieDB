@@ -66,6 +66,52 @@ def register():
                            title="Cadastrar um novo usuário",
                            form=form)
 
+@bp.route('/revalida_email/<uuid:user_id>')
+def revalida_email(user_id):
+    """
+    Reenvia o email de validação para o usuário com o ID fornecido.
+
+    - Usuários autenticados não podem acessar esta rota.
+    - Verifica se o usuário existe e se não está ativo.
+    - Gera um novo token de validação e envia um email com o link de confirmação.
+    - Exibe mensagens de sucesso ou erro conforme o caso.
+
+    Args:
+        user_id (UUID): Identificador único do usuário.
+
+    Returns:
+        Response: Redireciona para a página de login.
+    """
+    if current_user.is_authenticated:
+        flash("Acesso não autorizado para usuários logados no sistema", category='warning')
+        return redirect(request.referrer if request.referrer else url_for('root.index'))
+
+    try:
+        uuid_obj = UUID(str(user_id))
+    except ValueError:
+        flash("ID de usuário inválido", category='warning')
+        return redirect(url_for('root.index'))
+
+    usuario = User.get_by_id(uuid_obj)
+    if usuario is None:
+        flash("Usuário inexistente", category='warning')
+        return redirect(url_for('root.index'))
+    if usuario.ativo:
+        flash("Usuário já está ativo. Faça login no sistema", category='info')
+        return redirect(url_for('auth.login'))
+
+    token = create_jwt_token(action=JWT_action.VALIDAR_EMAIL, sub=usuario.email)
+    current_app.logger.debug("Token de validação de email: %s", token)
+    body = render_template('auth/email_confirmation.jinja2',
+                           nome=usuario.nome,
+                           url=url_for('auth.valida_email', token=token))
+    if not usuario.send_email(subject="Confirme o seu email", body=body):
+        flash("Erro no envio do email de confirmação da conta", category="danger")
+    else:
+        flash(f"Um novo email de confirmação foi enviado para {usuario.email}. "
+              f"Confirme o seu email antes de logar no sistema", category='success')
+    return redirect(url_for('auth.login'))
+
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -95,8 +141,10 @@ def login():
             flash("Email ou senha incorretos", category='warning')
             return redirect(url_for('auth.login'))
         if not usuario.ativo:
-            flash("Usuário está impedido de acessar o sistema. Procure um adminstrador",
-                  category='danger')
+
+            flash(Markup(f"Usuário está impedido de acessar o sistema. Precisa de um <a href=\""
+                         f"{url_for('auth.revalida_email', user_id=usuario.id)}\""
+                         f">novo email de confirmacao</a>?"), category='warning')
             return redirect(url_for('auth.login'))
         if usuario.usa_2fa:
             # CRITICO: Token indicando que a verificação da senha está feita, mas o 2FA
