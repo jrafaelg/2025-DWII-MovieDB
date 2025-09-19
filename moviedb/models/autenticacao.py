@@ -289,7 +289,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     def verify_totp(self, token) -> bool:
         """
-        DESCONTINUADO: Este método será removido em versões futuras.
+        DESCONTINUADO: Este metodo será removido em versões futuras.
 
         Use verify_2fa_code() no lugar.
         """
@@ -305,7 +305,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     def verify_totp_backup(self, token) -> bool:
         """
-        DESCONTINUADO: Este método será removido em versões futuras.
+        DESCONTINUADO: Este metodo será removido em versões futuras.
 
         Use verify_2fa_code() no lugar.
         """

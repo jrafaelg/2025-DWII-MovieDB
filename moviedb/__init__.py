@@ -12,6 +12,18 @@ from moviedb.infra.modulos import bootstrap, db, login_manager, migrate
 
 
 def anonymous_required(f):
+    """
+    Decorador para restringir acesso a rotas apenas para usuários anônimos.
+
+    Se o usuário estiver autenticado, exibe uma mensagem de aviso e redireciona para a página inicial.
+    Caso contrário, permite o acesso à função decorada.
+
+    Args:
+        f (function): Função a ser decorada.
+
+    Returns:
+        function: Função decorada que verifica se o usuário está autenticado.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         from flask_login import current_user
