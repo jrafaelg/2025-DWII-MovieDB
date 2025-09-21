@@ -6,3 +6,9 @@ class JWT_action(Enum):
     VALIDAR_EMAIL = 1
     RESET_PASSWORD = 2
     PENDING_2FA = 3
+
+class Autenticacao2FA(Enum):
+    WRONG = 0
+    TOTP = 1
+    BACKUP = 2
+    REUSED = 3

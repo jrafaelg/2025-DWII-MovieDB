@@ -5,6 +5,7 @@ from flask_wtf.file import FileAllowed, FileField
 from wtforms.fields.simple import BooleanField, HiddenField, PasswordField, StringField, SubmitField
 from wtforms.validators import Email, EqualTo, InputRequired, Length, ValidationError
 
+from moviedb.forms.validators import CampoImutavel
 
 class UniqueEmail(object):
     """
@@ -21,7 +22,7 @@ class UniqueEmail(object):
 
     def __call__(self, form, field):
         """
-        Verifica se já existe um usuário com o email informado.
+        Verifica se um email já está cadastrado.
 
         Args:
             form: O formulário sendo validado.
@@ -79,82 +80,24 @@ class SenhaComplexa(object):
 
         min_caracteres = current_app.config.get('PASSWORD_MIN', 8)
         senha_valida = (len(field.data) >= min_caracteres)
-        mensagens = [f"A sua senha precisa ter pelo menos {min_caracteres} caracteres"]
+        mensagens = [f"pelo menos {min_caracteres} caracteres"]
 
         for teste in lista_de_testes:
             if current_app.config.get(teste.config, False):
                 senha_valida = senha_valida and (re.search(teste.re, field.data) is not None)
                 mensagens.append(teste.mensagem)
 
-        mensagem = ", ".join(mensagens)
-        pos = mensagem.rfind(', ')
-        if pos > -1:
-            mensagem = mensagem[:pos] + ' e ' + mensagem[pos + 2:]
+        mensagem = "A sua senha precisa conter: "
+        if len(mensagens) > 1:
+            mensagem = mensagem + " e ".join([", ".join(mensagens[:-1]), mensagens[-1]])
+        else:
+            mensagem = mensagem + mensagens[0]
+        mensagem = mensagem + "."
 
         if not senha_valida:
             raise ValidationError(mensagem)
 
         return
-
-
-class DadosImutaveisDoUsuario:
-    """
-    Validador WTForms para garantir que um campo não seja modificado pelo usuário no lado do
-    cliente.
-
-    Este validador compara o valor do campo com o valor correspondente no
-    objeto `current_user`. Se os valores forem diferentes, uma `ValidationError`
-    é levantada.
-
-    Casos limite:
-        - Usuário não autenticado: lança exceção.
-        - Campo 'id' convertido para string para garantir comparação correta.
-    """
-
-    def __init__(self, field_name: str, message: str = None) -> None:
-        """
-        Inicializa o validador de campos imutáveis do usuário.
-
-        Args:
-            field_name (str): Nome do atributo no objeto `current_user` a ser comparado.
-            message (str, opcional): Mensagem de erro personalizada.
-
-        Design:
-            - Permite customização da mensagem de erro.
-        """
-        self.field_name = field_name
-        self.message = message or (
-            f"Tentativa de modificação não autorizada do campo {field_name}"
-        )
-
-    def __call__(self, form, field) -> None:
-        """
-        Executa a validação do campo imutável.
-
-        Utiliza logging para registrar tentativas de violação.
-
-        Args:
-            form: O formulário WTForms sendo validado.
-            field: O campo a ser verificado.
-
-        Raises:
-            ValidationError: se o valor do campo for diferente do valor esperado.
-        """
-        if not current_user.is_authenticated:
-            raise ValidationError("Usuário não autenticado")
-
-        expected_value = getattr(current_user, self.field_name)
-        if self.field_name == 'id':
-            expected_value = str(expected_value)
-
-        if field.data != expected_value:
-            current_app.logger.warning("Violação da integridade dos dados")
-            current_app.logger.warning(
-                    f"Usuário {current_user.id} tentou "
-                    f"modificar o campo {self.field_name} "
-                    f"de '{expected_value}' para '{field.data}'"
-            )
-            raise ValidationError(self.message)
 
 
 class RegistrationForm(FlaskForm):
@@ -220,7 +163,11 @@ class AskToResetPasswordForm(FlaskForm):
 
 
 class ProfileForm(FlaskForm):
-    id = HiddenField(validators=[DadosImutaveisDoUsuario('id')])
+    def __init__(self, user=None, **kwargs):
+        super().__init__(**kwargs)
+        self.reference_obj = user or current_user
+
+    id = HiddenField(validators=[CampoImutavel('id')])
 
     nome = StringField(
             label="Nome",
@@ -229,7 +176,7 @@ class ProfileForm(FlaskForm):
                                message="O nome pode ter até 60 caracteres")])
     email = StringField(
             label="Email",
-            validators=[DadosImutaveisDoUsuario('email')])
+            validators=[CampoImutavel('email', message="O email não pode ser alterado.")])
 
     usa_2fa = BooleanField(
             label="Ativar o segundo fator de autenticação")

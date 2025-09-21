@@ -12,7 +12,7 @@ from moviedb.forms.auth import AskToResetPasswordForm, LoginForm, ProfileForm, R
     SetNewPasswordForm
 from moviedb.infra.tokens import create_jwt_token, verify_jwt_token
 from moviedb.models.autenticacao import normalizar_email, User
-from moviedb.models.enumeracoes import JWT_action
+from moviedb.models.enumeracoes import Autenticacao2FA, JWT_action
 
 bp = Blueprint(name='auth',
                import_name=__name__,
@@ -63,6 +63,7 @@ def register():
     return render_template('auth/register.jinja2',
                            title="Cadastrar um novo usuário",
                            form=form)
+
 
 @bp.route('/revalida_email/<uuid:user_id>')
 @anonymous_required
@@ -203,8 +204,9 @@ def get2fa():
             dados_token.get('action') != JWT_action.PENDING_2FA or \
             not dados_token.get('extra_data', False):
         session.pop('pending_2fa_token', None)
-        current_app.logger.warning("Tentativa de acesso 2FA com token inválido ou expirado a partir do IP %s",
-                                   request.remote_addr)
+        current_app.logger.warning(
+            "Tentativa de acesso 2FA com token inválido ou expirado a partir do IP %s",
+            request.remote_addr)
         flash("Sessão de autenticação inválida ou expirada. Refaça o login.", category='warning')
         return redirect(url_for('auth.login'))
 
@@ -233,7 +235,7 @@ def get2fa():
                 next_page = url_for('root.index')
 
             flash(f"Usuario {usuario.email} logado", category='success')
-            if metodo == 'backup':
+            if metodo == Autenticacao2FA.BACKUP:
                 flash(Markup("Você usou um código reserva para autenticação. "
                              "Considere gerar novos códigos reserva na sua página de perfil."),
                       category='warning')
@@ -278,7 +280,8 @@ def valida_email(token):
     Valida o email do usuário a partir de um token JWT enviado na URL.
 
     - Usuários autenticados não podem acessar esta rota.
-    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a VALIDAR_EMAIL.
+    - O token JWT é verificado e deve conter as claims 'sub' (email) e 'action' igual a
+    VALIDAR_EMAIL.
     - Se o usuário existir, não estiver ativo e o token for válido, ativa o usuário.
     - Exibe mensagens de sucesso ou erro conforme o caso.
 
@@ -523,7 +526,7 @@ def enable_2fa():
 
     form = Read2FACodeForm()
     if request.method == 'POST' and form.validate():
-        resultado, _ = current_user.verify_2fa_code(form.codigo.data, totp_only=True)
+        resultado, metodo = current_user.verify_2fa_code(form.codigo.data, totp_only=True)
         if resultado:
             codigos = current_user.enable_2fa(otp_secret=current_user.otp_secret,
                                               ultimo_otp=form.codigo.data,
@@ -542,7 +545,13 @@ def enable_2fa():
                                    title_card="Códigos reserva para segundo fator de autenticação",
                                    subtitle_card=Markup(subtitle_card))
         # Código errado
-        flash("O código informado está incorreto. Tente novamente.", category='warning')
+        if metodo == Autenticacao2FA.REUSED:
+            flash("O código informado foi usado recentemente. Se você está vendo esta mensagem "
+                  "repetidamente, desative e reative o 2FA.", category='warning')
+            current_app.logger.error("Usuário %s reutilizou um código TOTP na ativação do 2FA",
+                                     current_user.email)
+        else:
+            flash("O código informado está incorreto. Tente novamente.", category='warning')
         return redirect(url_for('auth.enable_2fa'))
 
     return render_template('auth/enable_2fa.jinja2',

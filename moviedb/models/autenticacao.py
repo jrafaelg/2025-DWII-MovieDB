@@ -14,6 +14,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, select, String, Tex
 from sqlalchemy.orm import relationship
 
 from moviedb import db
+from moviedb.models.enumeracoes import Autenticacao2FA
 from moviedb.models.mixins import BasicRepositoryMixin
 
 
@@ -69,14 +70,17 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     @property
     def email(self):
+        """Retorna o e-mail normalizado do usuário."""
         return self.email_normalizado
 
     @email.setter
     def email(self, value):
+        """Define e normaliza o e-mail do usuário."""
         self.email_normalizado = normalizar_email(value)
 
     @property
     def is_active(self):
+        """Indica se o usuário está ativo."""
         return self.ativo
 
     def get_id(self):  # https://flask-login.readthedocs.io/en/latest/#alternative-tokens
@@ -84,10 +88,12 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     @property
     def password(self):
+        """Retorna o hash da senha do usuário."""
         return self.password_hash
 
     @password.setter
     def password(self, value):
+        """Armazena o has da senha do usuário."""
         from werkzeug.security import generate_password_hash
         self.password_hash = generate_password_hash(value)
 
@@ -104,6 +110,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     @property
     def foto(self) -> (bytes, str):
+        """Retorna a foto original do usuário em bytes e o tipo MIME."""
         if self.com_foto:
             data = b64decode(self.foto_base64)
             mime_type = self.foto_mime
@@ -114,6 +121,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
 
     @property
     def avatar(self) -> (bytes, str):
+        """Retorna o avatar do usuário em bytes e o tipo MIME."""
         if self.com_foto:
             data = b64decode(self.avatar_base64)
             mime_type = self.foto_mime
@@ -300,6 +308,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         return self._verify_totp(token)
 
     def _verify_totp(self, token: str) -> bool:
+        """Metodo interno para verificar o código TOTP."""
         totp = pyotp.TOTP(self.otp_secret)
         return totp.verify(token, valid_window=1)
 
@@ -316,15 +325,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         return self._verify_totp(token)
 
     def _verify_totp_backup(self, token) -> bool:
-        """
-        Verifica se o token fornecido corresponde a algum dos códigos de backup 2FA do usuário.
-
-        Args:
-            token (str): Código de backup a ser verificado.
-
-        Returns:
-            bool: True se o código for válido e removido, False caso contrário.
-        """
+        """Metodo interno para verificar o código de backup 2FA."""
         from werkzeug.security import check_password_hash
         for codigo in self.lista_2fa_backup:
             if check_password_hash(codigo.hash_codigo, token):
@@ -333,30 +334,36 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                 return True
         return False
 
-    def verify_2fa_code(self, token, totp_only: bool = False) -> tuple[bool, str]:
+    def verify_2fa_code(self, token, totp_only: bool = False) -> tuple[bool, Autenticacao2FA]:
         """
         Verifica código 2FA e retorna resultado com tipo de autenticação usado.
 
+        Se for usado um código reserva, ele é removido da lista de códigos válidos.
+
         Args:
             token (str): Código 2FA a ser verificado.
-            totp_only (bool): Se True, não tenta verificar códigos de backup. Padrão: False.
+            totp_only (bool): Se True, não tenta verificar códigos reserva. Padrão: False.
 
         Returns:
-            tuple[bool, str]: (success, auth_method) onde auth_method é 'totp' ou 'backup'
+            tuple[bool, Autenticacao2FA]: (success, auth_method) onde auth_method é o tipo de 2FA usado.
         """
+        # Verifica se o código é o mesmo usado por último (não é válido)
+        if token == self.ultimo_otp:
+            return False, Autenticacao2FA.REUSED
+
         # Tenta TOTP primeiro
         if self._verify_totp(token):
-            return True, 'totp'
+            return True, Autenticacao2FA.TOTP
 
-        # Se totp_only=True, não verifica backup codes (usado durante ativação)
+        # Se totp_only=True, não verifica códigos reserva (usado durante ativação)
         if totp_only:
-            return False, 'invalid'
+            return False, Autenticacao2FA.WRONG
 
         # Tenta códigos de backup
         if self.usa_2fa and self._verify_totp_backup(token):
-            return True, 'backup'
+            return True, Autenticacao2FA.BACKUP
 
-        return False, 'invalido'
+        return False, Autenticacao2FA.WRONG
 
     def generate_2fa_backup(self, quantos: int = 5) -> list[str]:
         """
@@ -378,7 +385,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         # Gera novos códigos
         codigos = []
         for _ in range(quantos):
-            codigo = "".join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
+            codigo = "".join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789') for _ in range(6))
             codigos.append(codigo)
             backup2fa = Backup2FA()
             backup2fa.hash_codigo = generate_password_hash(codigo)

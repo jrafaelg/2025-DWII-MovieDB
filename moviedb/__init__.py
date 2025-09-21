@@ -57,6 +57,12 @@ def create_app(config_filename: str = 'config.dev.json') -> Flask:
     except FileNotFoundError:
         app.logger.fatal("O arquivo de configuração '%s' não existe" % (config_filename,))
         sys.exit(1)
+    except json.JSONDecodeError as e:
+        app.logger.fatal("O arquivo de configuração '%s' não é um JSON válido: %s" % (config_filename, str(e)))
+        sys.exit(1)
+    except Exception as e:
+        app.logger.fatal("Erro ao carregar o arquivo de configuração '%s': %s" % (config_filename, str(e)))
+        sys.exit(1)
 
     if "SQLALCHEMY_DATABASE_URI" not in app.config:
         app.logger.fatal("A chave 'SQLALCHEMY_DATABASE_URI' não está "
@@ -75,11 +81,9 @@ def create_app(config_filename: str = 'config.dev.json') -> Flask:
 
     if "SECRET_KEY" not in app.config or app.config.get("SECRET_KEY") is None:
         secret_key = os.urandom(32).hex()
-        app.logger.warning("A chave 'SECRET_KEY' não está presente no "
-                           "arquivo de configuração")
+        app.logger.warning("A chave 'SECRET_KEY' não está presente no arquivo de configuração")
         app.logger.warning("Gerando chave aleatória: '%s'" % (secret_key,))
-        app.logger.warning("Para não invalidar os logins persistentes e os JWT "
-                           "gerados efetuados nesta instância da aplicação, "
+        app.logger.warning("Para não invalidar os tokens gerados nesta instância da aplicação, "
                            "adicione a chave acima ao arquivo de configuração")
         app.config["SECRET_KEY"] = secret_key
 

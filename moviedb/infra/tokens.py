@@ -17,11 +17,13 @@ def create_jwt_token(action: JWT_action = JWT_action.NO_ACTION,
     Args:
         action: A ação para a qual o token está sendo usado (opcional).
         sub: O assunto do token (por exemplo, email do usuário).
-        expires_in: O tempo de expiração do token em segundos. Se for negativo, o token não expira. Default de 10min
+        expires_in: O tempo de expiração do token em segundos. Se for negativo, o token não
+        expira. Default de 10min
         extra_data: Dicionário com dados adicionais para incluir no payload (opcional).
 
     Returns:
-        O token JWT codificado.
+        O token JWT codificado com as reivindicações sub, iat, nbf, action e, opcionalmente,
+        exp e extra_data.
 
     Raises:
         ValueError: Se o objeto 'sub' não puder ser convertido em string.
@@ -84,15 +86,12 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
     except jwt.ExpiredSignatureError as e:
         current_app.logger.error("JWT Expired: %s", e)
         claims.update({'reason': "expired"})
-
     except jwt.InvalidTokenError as e:
         current_app.logger.error("Invalid JWT: %s", e)
         claims.update({'reason': "invalid"})
-
     except jwt.InvalidSignatureError as e:
         current_app.logger.error("Invalid JWT signature: %s", e)
         claims.update({'reason': "bad_signature"})
-
     except ValueError as e:
         current_app.logger.error("ValueError: %s", e)
         claims.update({'reason': "valueerror"})
