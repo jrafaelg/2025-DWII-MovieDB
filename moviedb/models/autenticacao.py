@@ -435,6 +435,9 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         self.ultimo_otp = ultimo_otp if ultimo_otp is not None else pyotp.TOTP(otp_secret).now()
         if generate_backup and back_codes > 0:
             return self.generate_2fa_backup(back_codes)
+        else:
+            db.session.commit()
+            return None
 
     def disable_2fa(self) -> bool:
         """

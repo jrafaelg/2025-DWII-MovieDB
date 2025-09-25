@@ -38,40 +38,43 @@ Para que a aplicação possa ser executado, é preciso que haja um arquivo JSON 
 `config.dev.json` no diretório `instance`. Você pode criar esse arquivo copiando o conteúdo do
 arquivo `config.sample.json` e ajustando os valores conforme necessário.
 
+1. Instale as dependências do projeto:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
 ## Migração do banco de dados
 
 A migração do banco de dados, agora, está sendo feita pelo Flask-Migrate. Para preparar a aplicação,
 você deve seguir os seguintes passos:
 
-1. Instale as dependências do projeto:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Configure a variável de ambiente `FLASK_APP` para apontar para o arquivo principal da aplicação:
+1. Configure a variável de ambiente `FLASK_APP` para apontar para o arquivo principal da aplicação:
    ```bash
    export FLASK_APP=app.py  # No Windows use: set FLASK_APP=app.py
    ```
-3. Inicialize o repositório de migrações:
+2. Inicialize o repositório de migrações:
    ```bash
    flask db init
    ```
-4. Faça as alterações necessárias no arquivo `migrations/env.py` para configurar o `target_metada` e carregar os modelos da aplicação (por volta da linha 30):
+3. Faça as alterações necessárias no arquivo `migrations/env.py` para configurar o `target_metada` e carregar os modelos da aplicação (por volta da linha 30):
    ```python
    from moviedb import db
    import moviedb.models # noqa: F401
    target_metadata = db.metadata
    ```
-5. Crie a primeira migração:
+4. Crie a primeira migração:
    ```bash
    flask db migrate -m "Migracao inicial"
    ```
-6. Aplique a migração ao banco de dados:
+5. Aplique a migração ao banco de dados:
    ```bash
    flask db upgrade
    ```
-7. Agora, você pode rodar a aplicação:
+**Se a sua aplicação já tem migrações criadas (há arquivos no diretório `migrations\versions`), não execute os passos 2, 3 e 4. Apenas execute o passo 5 para aplicar as migrações ao banco de dados.**
+
+## Exxecução da aplicação
+
+1. Agora, você pode rodar a aplicação:
    ```bash
    flask run
    ```
-
-**Se a sua aplicação já tem migrações criadas (há arquivos no diretório `migrations\versions`), não execute os passos 3, 4 e 5. Apenas execute o passo 6 para aplicar as migrações ao banco de dados.**

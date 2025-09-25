@@ -443,7 +443,7 @@ def profile():
         renderiza o formulário de perfil.
     """
     form = ProfileForm()
-    # TODO: quando submete uma foto, ao recarregar o formulário ele não acrescente o botão de
+    # TODO: quando submete uma foto, ao recarregar o formulário ele não acrescenta o botão de
     #  remover a foto que outrora fora retirado
     if not current_user.com_foto:
         del form.remover_foto
