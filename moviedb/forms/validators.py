@@ -64,15 +64,16 @@ class CampoImutavel:
             expected_value = getattr(reference_obj, self.attr_name)
             expected_value = self.converter(expected_value)
         except AttributeError:
-            current_app.logger.error(f"Atributo '{self.attr_name}' não encontrado no objeto "
-                                     f"{type(reference_obj).__name__}")
+            current_app.logger.error("Atributo '%s' não encontrado no objeto %s" %
+                                     (self.attr_name, type(reference_obj).__name__,))
             raise ValidationError("Erro interno na validação")
         except Exception as e:
-            current_app.logger.error(f"Erro ao processar valor de referência para "
-                                     f"{self.field_name}: {str(e)}")
+            current_app.logger.error("Erro ao processar valor de referência para %s: %s" %
+                                     (self.field_name, str(e),))
             raise ValidationError("Erro interno na validação")
 
         if field.data != expected_value:
-            current_app.logger.warning(f"Violação da integridade: campo {self.field_name} "
-                                       f"alterado de '{expected_value}' para '{field.data}'")
+            current_app.logger.warning(
+                "Violação da integridade: campo %s alterado de '%s' para '%s'" %
+                (self.field_name, expected_value, field.data,))
             raise ValidationError(self.message)

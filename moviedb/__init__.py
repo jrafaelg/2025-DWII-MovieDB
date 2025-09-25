@@ -15,8 +15,8 @@ def anonymous_required(f):
     """
     Decorador para restringir acesso a rotas apenas para usuários anônimos.
 
-    Se o usuário estiver autenticado, exibe uma mensagem de aviso e redireciona para a página inicial.
-    Caso contrário, permite o acesso à função decorada.
+    Se o usuário estiver autenticado, exibe uma mensagem de aviso e redireciona para a página
+    inicial; caso contrário, permite o acesso à função decorada.
 
     Args:
         f (function): Função a ser decorada.
@@ -24,6 +24,7 @@ def anonymous_required(f):
     Returns:
         function: Função decorada que verifica se o usuário está autenticado.
     """
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         from flask_login import current_user
@@ -58,10 +59,12 @@ def create_app(config_filename: str = 'config.dev.json') -> Flask:
         app.logger.fatal("O arquivo de configuração '%s' não existe" % (config_filename,))
         sys.exit(1)
     except json.JSONDecodeError as e:
-        app.logger.fatal("O arquivo de configuração '%s' não é um JSON válido: %s" % (config_filename, str(e)))
+        app.logger.fatal(
+            "O arquivo de configuração '%s' não é um JSON válido: %s" % (config_filename, str(e),))
         sys.exit(1)
     except Exception as e:
-        app.logger.fatal("Erro ao carregar o arquivo de configuração '%s': %s" % (config_filename, str(e)))
+        app.logger.fatal(
+            "Erro ao carregar o arquivo de configuração '%s': %s" % (config_filename, str(e),))
         sys.exit(1)
 
     if "SQLALCHEMY_DATABASE_URI" not in app.config:

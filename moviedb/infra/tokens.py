@@ -84,16 +84,16 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
             claims.update({'extra_data': payload.get('extra_data')})
 
     except jwt.ExpiredSignatureError as e:
-        current_app.logger.error("JWT Expired: %s", e)
+        current_app.logger.error("JWT Expired: %s" % (e,))
         claims.update({'reason': "expired"})
     except jwt.InvalidTokenError as e:
-        current_app.logger.error("Invalid JWT: %s", e)
+        current_app.logger.error("Invalid JWT: %s" % (e,))
         claims.update({'reason': "invalid"})
     except jwt.InvalidSignatureError as e:
-        current_app.logger.error("Invalid JWT signature: %s", e)
+        current_app.logger.error("Invalid JWT signature: %s" % (e,))
         claims.update({'reason': "bad_signature"})
     except ValueError as e:
-        current_app.logger.error("ValueError: %s", e)
+        current_app.logger.error("ValueError: %s" % (e,))
         claims.update({'reason': "valueerror"})
 
     return claims

@@ -11,6 +11,7 @@ class BasicRepositoryMixin:
     Mixin básico para repositórios SQLAlchemy, fornecendo métodos utilitários
     para operações comuns de consulta.
     """
+
     @classmethod
     def is_empty(cls) -> bool:
         """

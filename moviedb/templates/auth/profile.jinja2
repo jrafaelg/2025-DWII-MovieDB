@@ -8,10 +8,10 @@
         <div class="container d-flex">
             <div class="me-auto">
                 {% if current_user.com_foto %}
-                    <img src="{{ url_for('auth.imagem', id_usuario=current_user.id) }}"
+                    <img src="{{ url_for('auth.imagem', id_usuario=current_user.id, size="full") }}"
                          alt="Foto do usuário"
                          class="img-thumbnail"
-                         width="250" />
+                         width="250"/>
                 {% endif %}
             </div>
             <div class="ms-5 flex-grow-1">

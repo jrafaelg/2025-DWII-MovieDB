@@ -18,7 +18,7 @@ from moviedb.models.enumeracoes import Autenticacao2FA
 from moviedb.models.mixins import BasicRepositoryMixin
 
 
-def normalizar_email(email: str) -> str:
+def normalizar_email(email: str) -> Optional[str]:
     """
     Normaliza um endereço de e-mail utilizando a biblioteca email_validator.
 
@@ -26,17 +26,17 @@ def normalizar_email(email: str) -> str:
         email (str): Endereço de e-mail a ser normalizado.
 
     Returns:
-        str: E-mail normalizado em letras minúsculas.
-
-    Raises:
-        EmailNotValidError: Se o e-mail fornecido não for válido.
+        str: E-mail normalizado em letras minúsculas, ou None se o email for inválido.
     """
     from email_validator import validate_email
-    from email_validator.exceptions import EmailNotValidError
+    from email_validator.exceptions import EmailNotValidError, EmailSyntaxError
     try:
         return validate_email(email, check_deliverability=False).normalized.lower()
-    except EmailNotValidError:
-        raise
+    except (EmailNotValidError, EmailSyntaxError, TypeError):
+        return None
+    except Exception as e:
+        current_app.logger.error("Erro inesperado ao validar email '%s': %s" % (email, str(e),))
+        return None
 
 
 class User(db.Model, BasicRepositoryMixin, UserMixin):
@@ -76,7 +76,10 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
     @email.setter
     def email(self, value):
         """Define e normaliza o e-mail do usuário."""
-        self.email_normalizado = normalizar_email(value)
+        normalizado = normalizar_email(value)
+        if normalizado is None:
+            raise ValueError(f"E-mail inválido: {value}")
+        self.email_normalizado = normalizado
 
     @property
     def is_active(self):
@@ -98,10 +101,19 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         self.password_hash = generate_password_hash(value)
 
     @classmethod
-    def get_by_email(cls, email: str):
+    def get_by_email(cls, email: str) -> Optional['User']:
+        """
+        Retorna o usuário com o e-mail especificado, ou None se não encontrado
+
+        Args:
+            email (str): email previamente normalizado que será buscado
+
+        Returns:
+            O usuário encontrado, ou None
+        """
         return db.session.execute(
                 select(cls).
-                where(User.email_normalizado == normalizar_email(email))
+                where(User.email_normalizado == email)
         ).scalar_one_or_none()
 
     def check_password(self, password) -> bool:
@@ -231,19 +243,19 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                     TextBody=body
             )
             response = conteudo.send()
-            current_app.logger.debug("Email enviado para %s", self.email)
-            current_app.logger.debug("Resposta do Postmark: %s", response)
+            current_app.logger.debug("Email enviado para %s" % (self.email,))
+            current_app.logger.debug("Resposta do Postmark: %s" % (response,))
             if response['ErrorCode'] != 0:
-                current_app.logger.error("Erro ao enviar email para %s: %s",
-                                         (self.email, response['Message']))
+                current_app.logger.error("Erro ao enviar email para %s: %s" %
+                                         (self.email, response['Message'],))
                 return False
         else:
             current_app.logger.debug("Mensagem que SERIA enviada")
-            current_app.logger.debug("From: %s", current_app.config['EMAIL_SENDER'])
-            current_app.logger.debug("To: %s", self.email)
-            current_app.logger.debug("Subject: %s", subject)
+            current_app.logger.debug("From: %s" % (current_app.config['EMAIL_SENDER'],))
+            current_app.logger.debug("To: %s" % (self.email,))
+            current_app.logger.debug("Subject: %s" % (subject,))
             current_app.logger.debug("", )
-            current_app.logger.debug("%s", body)
+            current_app.logger.debug("%s" % (body,))
         return True
 
     @property
@@ -345,7 +357,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             totp_only (bool): Se True, não tenta verificar códigos reserva. Padrão: False.
 
         Returns:
-            tuple[bool, Autenticacao2FA]: (success, auth_method) onde auth_method é o tipo de 2FA usado.
+            tuple[bool, Autenticacao2FA]: (success, auth_method) onde auth_method é o tipo de 2FA
+            usado.
         """
         # Verifica se o código é o mesmo usado por último (não é válido)
         if token == self.ultimo_otp:
@@ -385,7 +398,9 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         # Gera novos códigos
         codigos = []
         for _ in range(quantos):
-            codigo = "".join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789') for _ in range(6))
+            codigo = "".join(
+                    secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789') for _
+                    in range(6))
             codigos.append(codigo)
             backup2fa = Backup2FA()
             backup2fa.hash_codigo = generate_password_hash(codigo)

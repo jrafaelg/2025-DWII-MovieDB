@@ -1,4 +1,3 @@
-from flask import current_app
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
@@ -6,6 +5,7 @@ from wtforms.fields.simple import BooleanField, HiddenField, PasswordField, Stri
 from wtforms.validators import Email, EqualTo, InputRequired, Length, ValidationError
 
 from moviedb.forms.validators import CampoImutavel
+
 
 class UniqueEmail(object):
     """

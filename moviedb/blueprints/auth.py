@@ -49,7 +49,7 @@ def register():
         # Atualiza o objeto usuário com os dados mais recentes do banco de dados.
         db.session.refresh(usuario)
         token = create_jwt_token(action=JWT_action.VALIDAR_EMAIL, sub=usuario.email)
-        current_app.logger.debug("Token de validação de email: %s", token)
+        current_app.logger.debug("Token de validação de email: %s" % (token,))
         body = render_template('auth/email_confirmation.jinja2',
                                nome=usuario.nome,
                                url=url_for('auth.valida_email', token=token))
@@ -98,7 +98,7 @@ def revalida_email(user_id):
         return redirect(url_for('auth.login'))
 
     token = create_jwt_token(action=JWT_action.VALIDAR_EMAIL, sub=usuario.email)
-    current_app.logger.debug("Token de validação de email: %s", token)
+    current_app.logger.debug("Token de validação de email: %s" % (token,))
     body = render_template('auth/email_confirmation.jinja2',
                            nome=usuario.nome,
                            url=url_for('auth.valida_email', token=token))
@@ -147,13 +147,13 @@ def login():
             session['pending_2fa_token'] = (
                 create_jwt_token(action=JWT_action.PENDING_2FA,
                                  sub=usuario.id,
-                                 expires_in=current_app.config.get('2FA_SESSION_TIMEOUT', -1),
+                                 expires_in=current_app.config.get('2FA_SESSION_TIMEOUT', 90),
                                  extra_data={
                                      'remember_me': bool(form.remember_me.data),
                                      'next'       : request.args.get('next')
                                  })
             )
-            current_app.logger.debug("pending_2fa_token: %s", session['pending_2fa_token'])
+            current_app.logger.debug("pending_2fa_token: %s" % (session['pending_2fa_token'],))
             flash("Conclua o login digitando o código do segundo fator de autenticação",
                   category='info')
             return redirect(url_for('auth.get2fa'))
@@ -161,7 +161,7 @@ def login():
         login_user(usuario, remember=form.remember_me.data)
         db.session.commit()
         flash(f"Usuario {usuario.email} logado", category='success')
-        current_app.logger.debug("Usuário %s logado", usuario.email)
+        current_app.logger.debug("Usuário %s logado" % (usuario.email,))
 
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
@@ -194,8 +194,8 @@ def get2fa():
     #  está presente. Se não estiver, redireciona para a página de login.
     pending_2fa_token = session.get('pending_2fa_token')
     if not pending_2fa_token:
-        current_app.logger.warning("Tentativa de acesso 2FA não autorizado a partir do IP %s",
-                                   request.remote_addr)
+        current_app.logger.warning(
+                "Tentativa de acesso 2FA não autorizado a partir do IP %s" % (request.remote_addr,))
         flash("Acesso negado. Reinicie o processo de login.", category='error')
         return redirect(url_for('auth.login'))
 
@@ -205,8 +205,8 @@ def get2fa():
             not dados_token.get('extra_data', False):
         session.pop('pending_2fa_token', None)
         current_app.logger.warning(
-            "Tentativa de acesso 2FA com token inválido ou expirado a partir do IP %s",
-            request.remote_addr)
+                "Tentativa de acesso 2FA com token inválido ou expirado a partir do IP %s" %
+                (request.remote_addr,))
         flash("Sessão de autenticação inválida ou expirada. Refaça o login.", category='warning')
         return redirect(url_for('auth.login'))
 
@@ -242,8 +242,8 @@ def get2fa():
             return redirect(next_page)
 
         # Código errado. Registra tentativa falha e permanece na página de 2FA
-        current_app.logger.warning("Tentativa falha de 2FA para usuario %s a partir do IP %s",
-                                   (usuario.id, request.remote_addr))
+        current_app.logger.warning("Código 2FA inválido para usuario %s a partir do IP %s" % (
+            usuario.id, request.remote_addr,))
         flash("Código incorreto. Tente novamente", category='warning')
 
     return render_template('auth/2fa.jinja2',
@@ -327,10 +327,12 @@ def reset_password(token):
     Returns:
         Response: Redireciona para a página de login ou inicial, conforme o caso.
     """
+
     claims = verify_jwt_token(token)
     if not (claims.get('valid', False) and {'sub', 'action'}.issubset(claims)):
         flash("Token incorreto ou incompleto", category='warning')
         return redirect(url_for('root.index'))
+
     usuario = User.get_by_email(claims.get('sub'))
     if usuario is not None and claims.get('action') == JWT_action.RESET_PASSWORD:
         form = SetNewPasswordForm()
@@ -380,8 +382,8 @@ def new_password():
                                    url=url_for('auth.reset_password', token=token))
             usuario.send_email(subject="Altere a sua senha", body=body)
             return redirect(url_for('auth.login'))
-        current_app.logger.warning("Pedido de reset de senha para usuário inexistente (%s)",
-                                   email)
+        current_app.logger.warning(
+                "Pedido de reset de senha para usuário inexistente (%s)" % (email,))
         return redirect(url_for('auth.login'))
     return render_template('auth/simple_form.jinja2',
                            title="Esqueci minha senha",
@@ -391,11 +393,11 @@ def new_password():
                            form=form)
 
 
-@bp.route('/<uuid:id_usuario>/imagem', methods=['GET'])
+@bp.route('/<uuid:id_usuario>/imagem/<size>', methods=['GET'])
 @login_required
-def imagem(id_usuario):
+def imagem(id_usuario, size):
     """
-    Retorna a imagem do usuário autenticado.
+    Retorna a imagem ou avatar do usuário autenticado, conforme o parâmetro size.
 
     - Apenas o próprio usuário pode acessar sua imagem.
     - Retorna 404 se o usuário não for o dono, não existir ou não possuir foto.
@@ -403,6 +405,7 @@ def imagem(id_usuario):
 
     Args:
         id_usuario (UUID): Identificador único do usuário.
+        size (str): 'full' para foto completa, 'avatar' para avatar.
 
     Returns:
         Response: Imagem do usuário ou status 404 se não encontrada.
@@ -412,32 +415,12 @@ def imagem(id_usuario):
     usuario = User.get_by_id(id_usuario)
     if usuario is None or not usuario.com_foto:
         return Response(status=404)
-    imagem_content, imagem_type = usuario.foto
-    return Response(imagem_content, mimetype=imagem_type)
-
-
-@bp.route('/<uuid:id_usuario>/avatar', methods=['GET'])
-@login_required
-def avatar(id_usuario):
-    """
-    Retorna o avatar do usuário autenticado.
-
-    - Apenas o próprio usuário pode acessar sua imagem.
-    - Retorna 404 se o usuário não for o dono, não existir ou não possuir foto.
-    - Utiliza o tipo MIME correto para a resposta.
-
-    Args:
-        id_usuario (UUID): Identificador único do usuário.
-
-    Returns:
-        Response: Imagem do usuário ou status 404 se não encontrada.
-    """
-    if str(current_user.id) != str(id_usuario):
+    if size == "full":
+        imagem_content, imagem_type = usuario.foto
+    elif size == "avatar":
+        imagem_content, imagem_type = usuario.avatar
+    else:
         return Response(status=404)
-    usuario = User.get_by_id(id_usuario)
-    if usuario is None or not usuario.com_foto:
-        return Response(status=404)
-    imagem_content, imagem_type = usuario.avatar
     return Response(imagem_content, mimetype=imagem_type)
 
 
@@ -548,8 +531,8 @@ def enable_2fa():
         if metodo == Autenticacao2FA.REUSED:
             flash("O código informado foi usado recentemente. Se você está vendo esta mensagem "
                   "repetidamente, desative e reative o 2FA.", category='warning')
-            current_app.logger.error("Usuário %s reutilizou um código TOTP na ativação do 2FA",
-                                     current_user.email)
+            current_app.logger.error(
+                "Usuário %s reutilizou um código TOTP na ativação do 2FA" % (current_user.email,))
         else:
             flash("O código informado está incorreto. Tente novamente.", category='warning')
         return redirect(url_for('auth.enable_2fa'))

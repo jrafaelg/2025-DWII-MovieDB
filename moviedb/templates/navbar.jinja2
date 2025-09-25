@@ -18,7 +18,9 @@
                         <ul class="dropdown-menu dropdown-menu-lg-end">
                             <li><a class="dropdown-item" href="#">Submenu</a></li>
                             <li><a class="dropdown-item" href="#">Submenu</a></li>
-                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
                             <li><a class="dropdown-item" href="#">Submenu</a></li>
                         </ul>
                     </li>
@@ -41,7 +43,7 @@
                                 <span class="fw-semibold">Acesso ao sistema</span>
                             {% else %}
                                 {% if current_user.com_foto %}
-                                    <img src="{{ url_for('auth.avatar', id_usuario=current_user.id) }}"
+                                    <img src="{{ url_for('auth.imagem', id_usuario=current_user.id, size="avatar") }}"
                                          class="rounded-circle me-2 align-middle"
                                          alt="Avatar do usuário"/>
                                 {% else %}
@@ -52,14 +54,18 @@
                         <ul class="dropdown-menu dropdown-menu-lg-end">
                             {% if current_user.is_anonymous %}
                                 <li><a class="dropdown-item"
-                                       href="{{ url_for("auth.login") }}">{{ render_icon('box-arrow-in-right') }}&nbsp;Login</a></li>
+                                       href="{{ url_for("auth.login") }}">{{ render_icon('box-arrow-in-right') }}&nbsp;Login</a>
+                                </li>
                                 <li><a class="dropdown-item"
-                                       href="{{ url_for("auth.register") }}">{{ render_icon('person-plus') }}&nbsp;Criar conta</a></li>
+                                       href="{{ url_for("auth.register") }}">{{ render_icon('person-plus') }}&nbsp;Criar
+                                    conta</a></li>
                             {% else %}
                                 <li><a class="dropdown-item"
-                                       href="{{ url_for("auth.profile") }}">{{ render_icon('person') }}&nbsp;Perfil</a></li>
+                                       href="{{ url_for("auth.profile") }}">{{ render_icon('person') }}&nbsp;Perfil</a>
+                                </li>
                                 <li><a class="dropdown-item"
-                                       href="{{ url_for("auth.logout") }}">{{ render_icon('box-arrow-right') }}&nbsp;Logout</a></li>
+                                       href="{{ url_for("auth.logout") }}">{{ render_icon('box-arrow-right') }}&nbsp;Logout</a>
+                                </li>
                             {% endif %}
                         </ul>
                 </ul>
