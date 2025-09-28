@@ -17,5 +17,5 @@ class Filme(db .Model, BasicRepositoryMixin):
     sinopse = Column(Text())
     orcamento = Column(DECIMAL)
     faturamento_lancamento = Column(DECIMAL(precision=2), default=0)
-    poster_principal = Column(String(250))
-    link_trailer = Column(String(250))
+    poster_principal = Column(Text, nullable=True, default=None)
+    link_trailer = Column(Text, nullable=True, default=None)
