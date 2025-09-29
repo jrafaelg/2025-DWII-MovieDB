@@ -2,7 +2,7 @@ from flask_login import current_user
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
 from wtforms.fields.simple import BooleanField, HiddenField, PasswordField, StringField, SubmitField
-from wtforms.validators import Email, EqualTo, InputRequired, Length
+from wtforms.validators import Email, EqualTo, InputRequired, Length, ReadOnly
 
 from moviedb.forms.validators import CampoImutavel
 from .validators import SenhaComplexa, UniqueEmail
@@ -78,10 +78,14 @@ class ProfileForm(FlaskForm):
     id = HiddenField(validators=[CampoImutavel('id')])
 
     nome = StringField(
+            # default="rafael g",
             label="Nome",
             validators=[InputRequired(message="É obrigatório informar um nome para cadastro"),
                         Length(max=60,
-                               message="O nome pode ter até 60 caracteres")])
+                               message="O nome pode ter até 60 caracteres")
+                        #,ReadOnly()
+                        ])
+
     email = StringField(
             label="Email",
             validators=[CampoImutavel('email', message="O email não pode ser alterado.")])
