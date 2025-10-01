@@ -451,7 +451,6 @@ def profile():
     if request.method == 'GET':
         form.id.data = str(current_user.id)
         form.nome.data = current_user.nome
-        #form.nome.default = current_user.nome
         form.email.data = current_user.email
         form.usa_2fa.data = current_user.usa_2fa
 

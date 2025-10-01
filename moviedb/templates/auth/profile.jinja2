@@ -2,6 +2,7 @@
 {% extends "layout.jinja2" %}
 {% block card_col %}col-xxl-9 col-sm-12{% endblock %}
 {% block content %}
+
     <form id="form" action="" method="post" class="form"
           enctype="multipart/form-data" role="form"
           novalidate>
@@ -21,6 +22,9 @@
                     {{ form.nome.label(class="form-label") }}
                     {% if form.nome.errors -%}
                         {{ form.nome(class="form-control is-invalid") }}
+                        {% for error in form.nome.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
                     {%- else -%}
                         {{ form.nome(class="form-control") }}
                     {%- endif %}
