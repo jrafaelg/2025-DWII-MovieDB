@@ -166,6 +166,7 @@ cython_debug/
 .idea/**/dbnavigator.xml
 .idea/misc.xml
 .idea/*.iml
+.idea/*.xml
 
 # Gradle
 .idea/**/gradle.xml

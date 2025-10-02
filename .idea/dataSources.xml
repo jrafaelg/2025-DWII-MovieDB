@@ -2,7 +2,7 @@
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
     <data-source source="LOCAL" name="mymovie [2]" uuid="02b8aa6c-469f-47a0-95cb-69e9da8c481c">
-      <driver-ref>d0dbe47c-70a9-4766-b786-2c19ab076134</driver-ref>
+      <driver-ref>53256d01-bcd0-46b1-8fca-5858cf8a548d</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/instance/mymovie.db</jdbc-url>
