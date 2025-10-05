@@ -68,6 +68,9 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                                     cascade='all, delete-orphan',
                                     passive_deletes=True)
 
+    filmes_avaliacoes = relationship('FilmeAvaliacao', back_populates='filme')
+    avaliacoes = relationship('Filme', secondary='avaliacoes', viewonly=True)
+
     @property
     def email(self):
         """Retorna o e-mail normalizado do usuário."""

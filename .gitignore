@@ -167,6 +167,7 @@ cython_debug/
 .idea/misc.xml
 .idea/*.iml
 .idea/*.xml
+.idea/*
 
 # Gradle
 .idea/**/gradle.xml
