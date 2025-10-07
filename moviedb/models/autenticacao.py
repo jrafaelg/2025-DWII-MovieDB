@@ -68,8 +68,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                                     cascade='all, delete-orphan',
                                     passive_deletes=True)
 
-    filmes_avaliacoes = relationship('FilmeAvaliacao', back_populates='filme')
-    avaliacoes = relationship('Filme', secondary='avaliacoes', viewonly=True)
+    filmes_avaliados = relationship('Filmes', secondary='avaliacoes', back_populates='usuarios')
+    avaliacoes = relationship('Avaliacao', back_populates='usuario')
 
     @property
     def email(self):

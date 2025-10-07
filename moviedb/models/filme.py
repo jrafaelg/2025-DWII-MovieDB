@@ -8,53 +8,32 @@ from moviedb.models.mixins import BasicRepositoryMixin
 from moviedb import db
 
 
-# class Base(DeclarativeBase):
-#     pass
-#
-#
-# class FilmeGenero(db.Model):
-#     __tablename__ = 'filmes_generos'
-#
-# # Tabela de associação
-# filmes_generos = Table(
-#     'filmes_generos',
-#     Base.metadata,
-#     Column('filme_id', Integer, ForeignKey('filmes.id'), primary_key=True),
-#     Column('genero_id', Integer, ForeignKey('generos.id'), primary_key=True)
-# )
-
-# class Association(Base):
-#     __tablename__ = "association_table"
-#     left_id: Mapped[int] = mapped_column(ForeignKey("left_table.id"), primary_key=True)
-#     right_id: Mapped[int] = mapped_column(ForeignKey("right_table.id"), primary_key=True)
-#     extra_data: Mapped[Optional[str]]
-#     child: Mapped["Child"] = relationship()
-
 class Avaliacao(db.Model, BasicRepositoryMixin):
     __tablename__ = 'avaliacoes'
 
-    filme_id = Column(Integer, ForeignKey('filmes.id'), primary_key=True)
-    usuario_id = Column(Integer, ForeignKey('usuarios.id'), primary_key=True)
+    filme_id = Column(Uuid(as_uuid=True), ForeignKey('filmes.id'), primary_key=True)
+    usuario_id = Column(Uuid(as_uuid=True), ForeignKey('usuarios.id'), primary_key=True)
+
     nota = Column(DECIMAL(1, 2))
     data_avaliacao = Column(Date, default=date.today, server_default="NOW()", nullable=False)
     comentario = Column(Text)
     recomenda = Column(Boolean, nullable=False, default=False)
 
     # Relacionamentos
-    filme = relationship('Filme', back_populates='FilmeAvaliacao')
-    usuario = relationship('User', back_populates='FilmeAvaliacao')
+    usuario = relationship('User', back_populates='avaliacoes')
+    filme = relationship('Filme', back_populates='avaliacoes')
 
 
 class FilmeGenero(db.Model, BasicRepositoryMixin):
     __tablename__ = 'filmes_generos'
 
-    filme_id = Column(Integer, ForeignKey('filmes.id'), primary_key=True)
-    genero_id = Column(Integer, ForeignKey('generos.id'), primary_key=True)
+    filme_id = Column(Uuid(as_uuid=True), ForeignKey('filmes.id'), primary_key=True)
+    genero_id = Column(Uuid(as_uuid=True), ForeignKey('generos.id'), primary_key=True)
     principal = Column(Boolean, nullable=False, default=False)
 
     # Relacionamentos
-    filme = relationship('Filme', back_populates='FilmeGenero')
-    genero = relationship('Genero', back_populates='FilmeGenero')
+    filme = relationship('Filme', back_populates='filmes_generos')
+    genero = relationship('Genero', back_populates='filmes_generos')
 
 
 class Filme(db.Model, BasicRepositoryMixin):
@@ -72,11 +51,27 @@ class Filme(db.Model, BasicRepositoryMixin):
     poster_principal = Column(Text, nullable=True, default=None)
     link_trailer = Column(Text, nullable=True, default=None)
 
+    generos = relationship('Genero', secondary='filmes_generos', back_populates='filmes')
     filmes_generos = relationship('FilmeGenero', back_populates='filme')
-    generos = relationship('Genero', secondary='filmes_generos', viewonly=True)
 
-    filmes_avaliacoes = relationship('FilmeAvaliacao', back_populates='filme')
-    avaliacoes = relationship('Avaliacao', secondary='avaliacoes', viewonly=True)
+    usuarios = relationship('User', secondary='avaliacoes', back_populates='filmes_avaliados')
+    avaliacoes = relationship('Avaliacao',  back_populates='filme')
+
+    # many-to-many relationship to Ator, bypassing the `Atuacao` class
+    # dentro de Ator tem filmes
+    atores = relationship('Ator', secondary='atuacoes', back_populates="filmes")
+    # association between Filme → Atuacao → Ator
+    # dentro de Atuacao tem filme
+    atuacoes = relationship('Atuacao', back_populates='filme')
+
+    # many-to-many relationship to Pessoa, bypassing the `Participacao` class
+    # dentro de Pessoa tem filmes
+    pessoas = relationship('Pessoa', secondary='participacao', back_populates="participacoes")
+    # association between Filme → Participacao → Pessoa
+    # dentro de Participacao tem filme
+    participacoes = relationship('Participacao', back_populates='filme')
+
+
 
 
 class Genero(db.Model, BasicRepositoryMixin):
@@ -85,10 +80,10 @@ class Genero(db.Model, BasicRepositoryMixin):
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome = Column(String(250), nullable=False)
     descricao = Column(String(250), nullable=False)
-    ativo = Column(Boolean, nullable=False, default=True)
+    principal = Column(Boolean, nullable=False, default=False)
 
-    filmes_generos = relationship('FilmeGenero', back_populates='filme')
-    filmes = relationship('Filme', secondary='filmes_generos', viewonly=True)
+    filmes_generos = relationship('FilmeGenero', back_populates='genero')
+    filmes = relationship('Filme', secondary='filmes_generos', back_populates='generos')
 
 
 
