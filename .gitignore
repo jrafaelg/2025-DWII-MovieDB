@@ -164,6 +164,10 @@ cython_debug/
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 .idea/**/dbnavigator.xml
+.idea/misc.xml
+.idea/*.iml
+.idea/*.xml
+.idea/*
 
 # Gradle
 .idea/**/gradle.xml
