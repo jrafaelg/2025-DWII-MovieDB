@@ -30,9 +30,10 @@ class Pessoa(db.Model, BasicRepositoryMixin):
 
     # many-to-many relationship to Filme, bypassing the `Participacao` class
     # dentro de Filme tem participacoes
-    filmes = relationship('Filme', secondary='participacoes', back_populates="participacoes")
+    filmes = relationship('Filme', secondary='participacoes', back_populates="pessoas")
+
     # association between Ator → Participacao → Filme
-    #dentro de Participacao tem pessoa
+    # dentro de Participacao tem pessoa
     participacoes = relationship('Participacao', back_populates='pessoa')
 
 
@@ -52,7 +53,7 @@ class Ator(db.Model, BasicRepositoryMixin):
     # dentro de Filme tem atores
     filmes = relationship('Filme', secondary='atuacoes', back_populates="atores")
     # association between Ator → Atuacao → Filme
-    #dentro de Atuacao tem ator
+    # dentro de Atuacao tem ator
     atuacoes = relationship('Atuacao', back_populates='ator')
 
 
@@ -64,7 +65,6 @@ class Sexo(db.Model, BasicRepositoryMixin):
 
 
 class Atuacao(db.Model, BasicRepositoryMixin):
-
     """
     Tabela associativa entre ator e filme
     Many-to-Many
@@ -79,7 +79,7 @@ class Atuacao(db.Model, BasicRepositoryMixin):
     ator_id = Column(Uuid(as_uuid=True), ForeignKey('atores.id'), primary_key=True)
 
     papel = Column(String(250), nullable=False)
-    protagonista  = Column(Boolean, nullable=False, default=False)
+    protagonista = Column(Boolean, nullable=False, default=False)
     orcamento = Column(DECIMAL(12, 2))
     tempo_tela = Column(Integer, default=0)
 
@@ -104,10 +104,11 @@ class Participacao(db.Model, BasicRepositoryMixin):
     observacoes = Column(Text)
 
     funcao_tecnica_id = Column(Uuid(as_uuid=True), ForeignKey('funcoes_tecnicas.id'))
-    funcao_tecnica = relationship("Sexo", back_populates="pessoa")
+    funcao_tecnica = relationship("FuncaoTecnica", back_populates="participacao")
 
     # association between Participacao → Pessoa
     pessoa = relationship('Pessoa', back_populates='participacoes')
+
     # association between Participacao → Filme
     filme = relationship('Filme', back_populates='participacoes')
 
@@ -119,13 +120,3 @@ class FuncaoTecnica(db.Model, BasicRepositoryMixin):
     categoria = Column(String(250), nullable=False)
     descricao = Column(Text)
     participacao = relationship("Participacao", back_populates="funcao_tecnica")
-
-
-
-
-
-
-
-
-
-

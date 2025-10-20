@@ -6,8 +6,6 @@ from wtforms.validators import InputRequired, Length, NumberRange
 
 
 class AddForm(FlaskForm):
-
-
     """
     lancado = Column(Boolean, nullable=False)
     duracao = Column(Integer(), nullable=False)
@@ -19,11 +17,11 @@ class AddForm(FlaskForm):
     """
 
     titulo_original = StringField(
-            label="Título original",
-            validators=[
-                InputRequired(message="É obrigatório informar um título para cadastro"),
-                Length(max=200, message="O nome pode ter até 200 caracteres")
-            ]
+        label="Título original",
+        validators=[
+            InputRequired(message="É obrigatório informar um título para cadastro"),
+            Length(max=200, message="O nome pode ter até 200 caracteres")
+        ]
     )
 
     titulo_nacional = StringField(
@@ -38,7 +36,7 @@ class AddForm(FlaskForm):
         label="Ano de lançamento",
         validators=[
             InputRequired(message="Informe o ano de lançamento"),
-            Length(min=4, max=4, message="O ano deve ter 4 dígitos" ),
+            Length(min=4, max=4, message="O ano deve ter 4 dígitos"),
             NumberRange(min=1900, message="O ano ser maior que 1900")
         ]
     )
@@ -81,14 +79,8 @@ class AddForm(FlaskForm):
     )
 
     poster_principal = FileField(
-            label="Poster",
-            validators=[
-                FileAllowed(upload_set=['jpg', 'jpeg', 'png'], message="Apenas arquivos JPG ou PNG")
-            ]
+        label="Poster",
+        validators=[
+            FileAllowed(upload_set=['jpg', 'jpeg', 'png'], message="Apenas arquivos JPG ou PNG")
+        ]
     )
-
-
-
-
-
-

@@ -47,7 +47,7 @@ class Filme(db.Model, BasicRepositoryMixin):
     duracao = Column(Integer(), nullable=False)
     sinopse = Column(Text)
     orcamento = Column(DECIMAL(12, 2))
-    faturamento_lancamento = Column(DECIMAL(12,2), default=0)
+    faturamento_lancamento = Column(DECIMAL(12, 2), default=0)
     poster_principal = Column(Text, nullable=True, default=None)
     link_trailer = Column(Text, nullable=True, default=None)
 
@@ -55,7 +55,7 @@ class Filme(db.Model, BasicRepositoryMixin):
     filmes_generos = relationship('FilmeGenero', back_populates='filme')
 
     usuarios = relationship('User', secondary='avaliacoes', back_populates='filmes_avaliados')
-    avaliacoes = relationship('Avaliacao',  back_populates='filme')
+    avaliacoes = relationship('Avaliacao', back_populates='filme')
 
     # many-to-many relationship to Ator, bypassing the `Atuacao` class
     # dentro de Ator tem filmes
@@ -66,12 +66,11 @@ class Filme(db.Model, BasicRepositoryMixin):
 
     # many-to-many relationship to Pessoa, bypassing the `Participacao` class
     # dentro de Pessoa tem filmes
-    pessoas = relationship('Pessoa', secondary='participacao', back_populates="participacoes")
+    pessoas = relationship('Pessoa', secondary='participacoes', back_populates="filmes")
+
     # association between Filme → Participacao → Pessoa
     # dentro de Participacao tem filme
     participacoes = relationship('Participacao', back_populates='filme')
-
-
 
 
 class Genero(db.Model, BasicRepositoryMixin):
@@ -84,6 +83,3 @@ class Genero(db.Model, BasicRepositoryMixin):
 
     filmes_generos = relationship('FilmeGenero', back_populates='genero')
     filmes = relationship('Filme', secondary='filmes_generos', back_populates='generos')
-
-
-

@@ -68,7 +68,7 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
                                     cascade='all, delete-orphan',
                                     passive_deletes=True)
 
-    filmes_avaliados = relationship('Filmes', secondary='avaliacoes', back_populates='usuarios')
+    filmes_avaliados = relationship('Filme', secondary='avaliacoes', back_populates='usuarios')
     avaliacoes = relationship('Avaliacao', back_populates='usuario')
 
     @property
@@ -115,8 +115,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             O usuário encontrado, ou None
         """
         return db.session.execute(
-                select(cls).
-                where(User.email_normalizado == email)
+            select(cls).
+            where(User.email_normalizado == email)
         ).scalar_one_or_none()
 
     def check_password(self, password) -> bool:
@@ -240,10 +240,10 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
             from postmarker.core import PostmarkClient
             postmark = PostmarkClient(server_token=current_app.config['SERVER_TOKEN'])
             conteudo = postmark.emails.Email(
-                    From=current_app.config['EMAIL_SENDER'],
-                    To=self.email,
-                    Subject=subject,
-                    TextBody=body
+                From=current_app.config['EMAIL_SENDER'],
+                To=self.email,
+                Subject=subject,
+                TextBody=body
             )
             response = conteudo.send()
             current_app.logger.debug("Email enviado para %s" % (self.email,))
@@ -402,8 +402,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         codigos = []
         for _ in range(quantos):
             codigo = "".join(
-                    secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789') for _
-                    in range(6))
+                secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789') for _
+                in range(6))
             codigos.append(codigo)
             backup2fa = Backup2FA()
             backup2fa.hash_codigo = generate_password_hash(codigo)
