@@ -66,11 +66,12 @@ class Filme(db.Model, BasicRepositoryMixin):
 
     # many-to-many relationship to Pessoa, bypassing the `Participacao` class
     # dentro de Pessoa tem filmes
-    pessoas = relationship('Pessoa', secondary='participacoes', back_populates="filmes")
+    pessoas = relationship("Pessoa", secondary="participacoes", back_populates="filmes")
 
     # association between Filme → Participacao → Pessoa
     # dentro de Participacao tem filme
-    participacoes = relationship('Participacao', back_populates='filme')
+    participacoes = relationship("Participacao", back_populates="filme")
+
 
 
 class Genero(db.Model, BasicRepositoryMixin):

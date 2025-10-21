@@ -30,11 +30,12 @@ class Pessoa(db.Model, BasicRepositoryMixin):
 
     # many-to-many relationship to Filme, bypassing the `Participacao` class
     # dentro de Filme tem participacoes
-    filmes = relationship('Filme', secondary='participacoes', back_populates="pessoas")
+    filmes = relationship("Filme", secondary="participacoes", back_populates="pessoas")
 
     # association between Ator → Participacao → Filme
     # dentro de Participacao tem pessoa
-    participacoes = relationship('Participacao', back_populates='pessoa')
+    participacoes = relationship("Participacao", back_populates="pessoa")
+
 
 
 class Ator(db.Model, BasicRepositoryMixin):
@@ -107,10 +108,10 @@ class Participacao(db.Model, BasicRepositoryMixin):
     funcao_tecnica = relationship("FuncaoTecnica", back_populates="participacao")
 
     # association between Participacao → Pessoa
-    pessoa = relationship('Pessoa', back_populates='participacoes')
+    pessoa = relationship("Pessoa", back_populates="participacoes")
 
     # association between Participacao → Filme
-    filme = relationship('Filme', back_populates='participacoes')
+    filme = relationship("Filme", back_populates="participacoes")
 
 
 class FuncaoTecnica(db.Model, BasicRepositoryMixin):
