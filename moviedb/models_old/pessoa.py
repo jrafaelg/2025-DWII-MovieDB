@@ -1,9 +1,7 @@
 import uuid
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column, String, Uuid, Date, Text, ForeignKey, Boolean, DECIMAL, Integer
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import relationship
 
 from moviedb.models.mixins import BasicRepositoryMixin
 from moviedb import db
@@ -12,11 +10,11 @@ from moviedb import db
 class Pessoa(db.Model, BasicRepositoryMixin):
     __tablename__ = 'pessoas'
 
-    # id: mixin
-    nome: Mapped[str] = mapped_column(String(200))
-    nacionalidade: Mapped[Optional[str]] = mapped_column(String(100), default=None)
-    nascimento: Mapped[Optional[datetime]] = mapped_column(Date, default=None)
-    biografia: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome = Column(String(250), nullable=False)
+    nacionalidade = Column(String(60), nullable=False)
+    nascimento = Column(Date)
+    biografia = Column(Text)
     foto_base64 = Column(Text, nullable=True, default=None)
     avatar_base64 = Column(Text, nullable=True, default=None)
 
@@ -37,6 +35,7 @@ class Pessoa(db.Model, BasicRepositoryMixin):
     # association between Ator → Participacao → Filme
     # dentro de Participacao tem pessoa
     participacoes = relationship("Participacao", back_populates="pessoa")
+
 
 
 class Ator(db.Model, BasicRepositoryMixin):

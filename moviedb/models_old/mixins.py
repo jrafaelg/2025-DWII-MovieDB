@@ -1,10 +1,7 @@
 import uuid
-from datetime import datetime
 from typing import Any, Dict, Optional, Self, Union
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
 
 from moviedb import db
 
@@ -14,8 +11,6 @@ class BasicRepositoryMixin:
     Mixin básico para repositórios SQLAlchemy, fornecendo métodos utilitários
     para operações comuns de consulta.
     """
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
     @classmethod
     def is_empty(cls) -> bool:
@@ -124,37 +119,19 @@ class BasicRepositoryMixin:
         if hasattr(cls, atributo):
             if casesensitive:
                 registro = db.session.execute(
-                    sa.select(cls).
-                    where(getattr(cls, atributo) == valor).
-                    limit(1)
+                        sa.select(cls).
+                        where(getattr(cls, atributo) == valor).
+                        limit(1)
                 ).scalar_one_or_none()
             else:
                 if isinstance(valor, str):
                     # noinspection PyTypeChecker
                     registro = db.session.execute(
-                        sa.select(cls).
-                        where(sa.func.lower(getattr(cls, atributo)) == sa.func.lower(valor)).
-                        limit(1)
+                            sa.select(cls).
+                            where(sa.func.lower(getattr(cls, atributo)) == sa.func.lower(valor)).
+                            limit(1)
                     ).scalar_one_or_none()
                 else:
                     raise TypeError("Para a operação case insensitive, o "
                                     f"atributo \"{atributo}\" deve ser da classe str")
         return registro
-
-
-class AuditMixin:
-    """
-    adiciona campos de auditoria e softdelet aos modelos
-    """
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_defaut=func.now()
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_defaut=func.now(), onupdate=func.now()
-    )
-
-    deleted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True)
-    )
