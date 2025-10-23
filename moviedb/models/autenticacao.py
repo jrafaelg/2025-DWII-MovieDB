@@ -2,6 +2,7 @@ import io
 import secrets
 import uuid
 from base64 import b64decode, b64encode
+from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
@@ -10,12 +11,13 @@ from flask import current_app
 from flask_login import UserMixin
 from PIL import Image
 from qrcode.main import QRCode
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, select, String, Text, Uuid
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, select, String, Text, Uuid, DateTime
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from moviedb import db
+from .custom_types import EncryptedType
 from moviedb.models.enumeracoes import Autenticacao2FA
-from moviedb.models.mixins import BasicRepositoryMixin
+from moviedb.models.mixins import BasicRepositoryMixin, AuditMixin
 
 
 def normalizar_email(email: str) -> Optional[str]:
@@ -39,23 +41,32 @@ def normalizar_email(email: str) -> Optional[str]:
         return None
 
 
-class User(db.Model, BasicRepositoryMixin, UserMixin):
+class User(db.Model, BasicRepositoryMixin, UserMixin, AuditMixin):
     __tablename__ = "usuarios"
 
-    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nome = Column(String(60), nullable=False)
-    email_normalizado = Column(String(180), nullable=False, unique=True, index=True)
-    password_hash = Column(String(256), nullable=False)
-    ativo = Column(Boolean, nullable=False, default=False, server_default='false')
+    # id: mixin
+    nome: Mapped[str] = mapped_column(String(60))
+    email_normalizado: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(256))
 
-    com_foto = Column(Boolean, default=False, server_default='false')
-    foto_base64 = Column(Text, nullable=True, default=None)
-    avatar_base64 = Column(Text, nullable=True, default=None)
-    foto_mime = Column(String(32), nullable=True, default=None)
+    ativo: Mapped[bool] = mapped_column(default=False, server_default='false')
+    dta_validacao_email: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),
+                                                                    default=None)
 
-    usa_2fa = Column(Boolean, default=False, server_default='false')
-    _otp_secret = Column(String(32), nullable=True, default=None)
-    ultimo_otp = Column(String(6), nullable=True, default=None)
+    com_foto: Mapped[bool] = mapped_column(default=False, server_default='false')
+    foto_base64: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    avatar_base64: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    foto_mime: Mapped[Optional[str]] = mapped_column(String(32), default=None)
+
+    usa_2fa: Mapped[bool] = mapped_column(default=False, server_default='false')
+    _otp_secret: Mapped[Optional[str]] = mapped_column(
+        EncryptedType(length=500,
+                      encryption_key="DATABASE_ENCRYPTION_KEY",
+                      salt_key="DATABASE_ENCRYPTION_SALT"), default=None)
+    ultimo_otp: Mapped[Optional[str]] = mapped_column(String(6), default=None)
+
+    ultimo_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),
+                                                             default=None)
 
     # Relação ORM que representa os códigos de backup 2FA associados ao usuário.
     # - `back_populates='usuario'`: sincroniza a relação bidirecional com Backup2FA.
@@ -461,13 +472,19 @@ class User(db.Model, BasicRepositoryMixin, UserMixin):
         return True
 
 
-class Backup2FA(db.Model):
+class Backup2FA(db.Model, BasicRepositoryMixin, AuditMixin):
     __tablename__ = 'backup2fa'
 
-    id = Column(Integer, primary_key=True)
-    hash_codigo = Column(String(256), nullable=False)
-    usuario_id = Column(Uuid(as_uuid=True), ForeignKey('usuarios.id'))
+    hash_codigo: Mapped[str] = mapped_column(String(256))
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey('usuarios.id', ondelete='CASCADE'),  # Explicit CASCADE
+        index=True
+    )
+    utilizado: Mapped[bool] = mapped_column(default=False, server_default='false')
+    dta_uso: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    dta_para_remocao: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),
+                                                                 nullable=True)
 
     # Relação ORM para acessar o usuário associado a este código de backup 2FA.
-    # `back_populates` garante sincronização bidirecional com User.lista_2fa_backup.
-    usuario = relationship('User', back_populates='lista_2fa_backup')
+    usuario: Mapped['User'] = relationship('User', foreign_keys=[usuario_id])

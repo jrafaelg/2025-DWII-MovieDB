@@ -40,7 +40,7 @@ class EquipeTecnica(db.Model, BasicRepositoryMixin, AuditMixin):
 
     filme: Mapped["Filme"] = relationship(back_populates="equipes_tecnicas")
     pessoa: Mapped["Pessoa"] = relationship(back_populates="equipes_tecnicas")
-    funcao: Mapped["FuncaoTecnica"] = relationship(back_populates="equipes_tecnicas")
+    funcao: Mapped["FuncoesTecnicas"] = relationship(back_populates="equipes_tecnicas")
 
 
 class FilmeGenero(db.Model, BasicRepositoryMixin, AuditMixin):

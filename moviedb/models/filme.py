@@ -1,86 +1,73 @@
 import uuid
-from datetime import date
 
-from sqlalchemy import Column, Uuid, String, Integer, Boolean, Text, DECIMAL, Table, ForeignKey, Date
-from sqlalchemy.orm import relationship
+from decimal import Decimal
+from typing import Optional
 
-from moviedb.models.mixins import BasicRepositoryMixin
+from sqlalchemy import Column, Uuid, String, Boolean, Text, DECIMAL
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from moviedb.models.mixins import BasicRepositoryMixin, AuditMixin
 from moviedb import db
 
 
-class Avaliacao(db.Model, BasicRepositoryMixin):
-    __tablename__ = 'avaliacoes'
-
-    filme_id = Column(Uuid(as_uuid=True), ForeignKey('filmes.id'), primary_key=True)
-    usuario_id = Column(Uuid(as_uuid=True), ForeignKey('usuarios.id'), primary_key=True)
-
-    nota = Column(DECIMAL(1, 2))
-    data_avaliacao = Column(Date, default=date.today, server_default="NOW()", nullable=False)
-    comentario = Column(Text)
-    recomenda = Column(Boolean, nullable=False, default=False)
-
-    # Relacionamentos
-    usuario = relationship('User', back_populates='avaliacoes')
-    filme = relationship('Filme', back_populates='avaliacoes')
-
-
-class FilmeGenero(db.Model, BasicRepositoryMixin):
-    __tablename__ = 'filmes_generos'
-
-    filme_id = Column(Uuid(as_uuid=True), ForeignKey('filmes.id'), primary_key=True)
-    genero_id = Column(Uuid(as_uuid=True), ForeignKey('generos.id'), primary_key=True)
-    principal = Column(Boolean, nullable=False, default=False)
-
-    # Relacionamentos
-    filme = relationship('Filme', back_populates='filmes_generos')
-    genero = relationship('Genero', back_populates='filmes_generos')
-
-
-class Filme(db.Model, BasicRepositoryMixin):
+class Filme(db.Model, BasicRepositoryMixin, AuditMixin):
     __tablename__ = 'filmes'
 
-    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    titulo_original = Column(String(250), nullable=False)
-    titulo_nacional = Column(String(250), nullable=False)
-    ano_lancamento = Column(Integer(), nullable=False)
-    lancado = Column(Boolean, nullable=False)
-    duracao = Column(Integer(), nullable=False)
-    sinopse = Column(Text)
-    orcamento = Column(DECIMAL(12, 2))
-    faturamento_lancamento = Column(DECIMAL(12, 2), default=0)
-    poster_principal = Column(Text, nullable=True, default=None)
-    link_trailer = Column(Text, nullable=True, default=None)
+    # id: mixin
+    titulo_original: Mapped[str] = mapped_column(String(250))
+    titulo_nacional: Mapped[str] = mapped_column(String(250), default=None)
+    ano_lancamento: Mapped[Optional[int]] = mapped_column(default=None)
+    lancado: Mapped[bool] = mapped_column(default=False, server_default='False')
+    duracao: Mapped[Optional[int]] = mapped_column(default=None)
+    sinopse: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    poster_base64: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    poster_mime: Mapped[Optional[str]] = mapped_column(String(32), default=None)
+    orcamento: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), default=None)
+    faturamento_lancamento: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), default=None)
 
-    generos = relationship('Genero', secondary='filmes_generos', back_populates='filmes')
-    filmes_generos = relationship('FilmeGenero', back_populates='filme')
+    link_trailer: Mapped[Optional[str]] = mapped_column(Text, default=None)
 
-    usuarios = relationship('User', secondary='avaliacoes', back_populates='filmes_avaliados')
-    avaliacoes = relationship('Avaliacao', back_populates='filme')
+    atuacoes: Mapped[list["Atuacoes"]] = relationship(
+        back_populates="filme",
+        cascade="all, delete-orphan"
+    )
 
-    # many-to-many relationship to Ator, bypassing the `Atuacao` class
-    # dentro de Ator tem filmes
-    atores = relationship('Ator', secondary='atuacoes', back_populates="filmes")
-    # association between Filme → Atuacao → Ator
-    # dentro de Atuacao tem filme
-    atuacoes = relationship('Atuacao', back_populates='filme')
+    equipes_tecnicas: Mapped[list["EquipeTecnica"]] = relationship(
+        back_populates="filme",
+        cascade="all, delete-orphan"
+    )
 
-    # many-to-many relationship to Pessoa, bypassing the `Participacao` class
-    # dentro de Pessoa tem filmes
-    pessoas = relationship("Pessoa", secondary="participacoes", back_populates="filmes")
+    filmes_generos: Mapped[list["FilmeGenero"]] = relationship(
+        back_populates="filmes_generos",
+        cascade="all, delete-orphan"
+    )
 
-    # association between Filme → Participacao → Pessoa
-    # dentro de Participacao tem filme
-    participacoes = relationship("Participacao", back_populates="filme")
+    avaliacoes: Mapped[list["Avaliacao"]] = relationship(back_populates="filme", cascade="all, delete-orphan")
 
 
-
-class Genero(db.Model, BasicRepositoryMixin):
+class Genero(db.Model, BasicRepositoryMixin, AuditMixin):
     __tablename__ = 'generos'
 
-    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nome = Column(String(250), nullable=False)
-    descricao = Column(String(250), nullable=False)
-    principal = Column(Boolean, nullable=False, default=False)
+    # id: mixin
+    nome: Mapped[str] = mapped_column(String(250), unique=True, index=True)
+    descricao: Mapped[str] = mapped_column(Text, default=None)
+    ativo: Mapped[bool] = mapped_column(default=True, server_default='true')
 
-    filmes_generos = relationship('FilmeGenero', back_populates='genero')
-    filmes = relationship('Filme', secondary='filmes_generos', back_populates='generos')
+    filmes_generos: Mapped[list["FilmeGenero"]] = relationship(
+        back_populates="generos",
+        cascade="all, delete-orphan"
+    )
+
+
+class FuncoesTecnicas(db.Model, BasicRepositoryMixin, AuditMixin):
+    __tablename__ = 'funcoes_tecnicas'
+
+    # id: mixin
+    nome: Mapped[str] = mapped_column(String(250), default=None, unique=True, index=True)
+    descricao: Mapped[str] = mapped_column(Text, default=None)
+    ativa: Mapped[bool] = mapped_column(default=True, server_default='true')
+
+    equipes_tecnicas: Mapped[list["EquipeTecnica"]] = relationship(
+        back_populates="funcoes_tecnicas",
+        cascade="all, delete-orphan"
+    )
