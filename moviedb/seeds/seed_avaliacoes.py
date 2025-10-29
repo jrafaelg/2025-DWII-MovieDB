@@ -65,7 +65,8 @@ def criar_avaliacoes():
         for usuario in usuarios_avaliar:
             print(f"filme_id {filme.id} usuario_id {usuario.id}")
             # Verificar se já existe avaliação
-            avaliacao_existe = Avaliacao.get_by_composed_id({
+            # get_by_composed_id não funciona, pois get busca por chaves primárias
+            avaliacao_existe = Avaliacao.get_by_fields({
                 "filme_id": filme.id,
                 "usuario_id": usuario.id
             })

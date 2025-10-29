@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Self, Union
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, func, select, ScalarResult
 from sqlalchemy.orm import Mapped, mapped_column
 
 from moviedb import db
@@ -83,6 +83,30 @@ class BasicRepositoryMixin:
         return db.session.execute(sentenca).scalars()
 
     @classmethod
+    def get_all_by(cls, criteria: Dict[str, Any] = None, order_by: Optional[str] = None) -> ScalarResult[Self]:
+        """Retorna todos os registros filtrados, opcionalmente ordenados por um atributo.
+
+        Args:
+            criteria (typing.Dict[str, typing.Any]): Dicionário com critérios de filtro
+                (atributo: valor).
+            order_by (typing.Optional[str]): Nome do atributo para ordenação.
+
+        Returns:
+            sqlalchemy.ScalarResult[typing.Self]: iterável de instâncias.
+        """
+        sentenca = sa.select(cls)
+        if criteria is not None:
+            for key, value in criteria.items():
+                if hasattr(cls, key):
+                    if isinstance(value, bool):
+                        sentenca = sentenca.where(getattr(cls, key).is_(value))
+                    else:
+                        sentenca = sentenca.where(getattr(cls, key) == value)
+        if order_by is not None and hasattr(cls, order_by):
+            sentenca = sentenca.order_by(getattr(cls, order_by))
+        return db.session.scalars(sentenca)
+
+    @classmethod
     def get_by_composed_id(cls, cls_dict_id: Dict[str, Any]) -> Optional[Self]:
         """
         Busca um registro por um ID composto.
@@ -91,15 +115,51 @@ class BasicRepositoryMixin:
             cls_dict_id (Dict[str, Any]): Dicionário com os campos do ID composto.
 
         Returns:
-            Optional[Self]: Instância encontrada ou None.
+            Optional[Self]: instância encontrada ou None.
         """
         for k, v in cls_dict_id.items():
             try:
                 cls_dict_id[k] = uuid.UUID(str(v))
             except ValueError:
                 cls_dict_id[k] = v
-        print(cls_dict_id)
         return db.session.get(cls, cls_dict_id)
+
+    @classmethod
+    def get_by_fields(cls, cls_dict_fields: Dict[str, Any]) -> Optional[Self]:
+        """
+        Busca um único registro pelos campos informados.
+        Converte automaticamente strings que parecem UUIDs para o tipo UUID.
+
+        Args:
+            cls: Classe do modelo SQLAlchemy
+            cls_dict_fields (Dict[str, Any]): Dicionário com os campos e valores para filtrar.
+                                              Ex: {"nome": "João", "email": "joao@email.com"}
+
+        Returns:
+            Optional[Self]: primeira instância encontrada ou None.
+
+        Exemplo:
+            usuario = User.get_by_fields({"email": "joao@email.com", "ativo": True})
+        """
+        # Converte valores que parecem UUID para o tipo UUID
+        for k, v in cls_dict_fields.items():
+            try:
+                cls_dict_fields[k] = uuid.UUID(str(v))
+            except (ValueError, AttributeError):
+                cls_dict_fields[k] = v
+
+        # Cria a query com os filtros
+        stmt = select(cls)
+        for campo, valor in cls_dict_fields.items():
+            if hasattr(cls, campo):
+                coluna = getattr(cls, campo)
+                stmt = stmt.where(coluna == valor)
+            else:
+                raise AttributeError(f"O modelo {cls.__name__} não possui o campo '{campo}'")
+
+        # Executa e retorna o primeiro resultado
+        result = db.session.execute(stmt)
+        return result.scalars().first()
 
     @classmethod
     def get_first_or_none_by(cls,
