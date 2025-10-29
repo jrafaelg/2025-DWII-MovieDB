@@ -43,7 +43,7 @@ class Ator(Pessoa, BasicRepositoryMixin, AuditMixin):
     # id: mixin
     id: Mapped[uuid.UUID] = mapped_column(ForeignKey('pessoas.id'), primary_key=True)
 
-    nome_artistico: Mapped[str] = mapped_column(String(200), default=None)
+    nome_artistico: Mapped[Optional[str]] = mapped_column(String(200), default=None)
 
     # relacionamento com atuações, para as participações nos filmes
     atuacoes: Mapped[list["Atuacoes"]] = relationship(back_populates="ator", cascade="all, delete-orphan")

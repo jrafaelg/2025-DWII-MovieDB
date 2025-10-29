@@ -38,7 +38,7 @@ class Filme(db.Model, BasicRepositoryMixin, AuditMixin):
     )
 
     filmes_generos: Mapped[list["FilmeGenero"]] = relationship(
-        back_populates="filmes_generos",
+        back_populates="filme",
         cascade="all, delete-orphan"
     )
 
@@ -54,7 +54,7 @@ class Genero(db.Model, BasicRepositoryMixin, AuditMixin):
     ativo: Mapped[bool] = mapped_column(default=True, server_default='true')
 
     filmes_generos: Mapped[list["FilmeGenero"]] = relationship(
-        back_populates="generos",
+        back_populates="genero",
         cascade="all, delete-orphan"
     )
 
@@ -68,6 +68,6 @@ class FuncoesTecnicas(db.Model, BasicRepositoryMixin, AuditMixin):
     ativa: Mapped[bool] = mapped_column(default=True, server_default='true')
 
     equipes_tecnicas: Mapped[list["EquipeTecnica"]] = relationship(
-        back_populates="funcoes_tecnicas",
+        back_populates="funcao",
         cascade="all, delete-orphan"
     )

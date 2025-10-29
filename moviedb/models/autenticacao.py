@@ -60,13 +60,16 @@ class User(db.Model, BasicRepositoryMixin, UserMixin, AuditMixin):
 
     usa_2fa: Mapped[bool] = mapped_column(default=False, server_default='false')
     _otp_secret: Mapped[Optional[str]] = mapped_column(
-        EncryptedType(length=500,
-                      encryption_key="DATABASE_ENCRYPTION_KEY",
-                      salt_key="DATABASE_ENCRYPTION_SALT"), default=None)
+        EncryptedType(
+            length=500,
+            encryption_key="DATABASE_ENCRYPTION_KEY",
+            salt_key="DATABASE_ENCRYPTION_SALT")
+        ,
+        default=None
+    )
     ultimo_otp: Mapped[Optional[str]] = mapped_column(String(6), default=None)
 
-    ultimo_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),
-                                                             default=None)
+    ultimo_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
 
     # Relação ORM que representa os códigos de backup 2FA associados ao usuário.
     # - `back_populates='usuario'`: sincroniza a relação bidirecional com Backup2FA.
@@ -79,8 +82,8 @@ class User(db.Model, BasicRepositoryMixin, UserMixin, AuditMixin):
                                     cascade='all, delete-orphan',
                                     passive_deletes=True)
 
-    filmes_avaliados = relationship('Filme', secondary='avaliacoes', back_populates='usuarios')
-    avaliacoes = relationship('Avaliacao', back_populates='usuario')
+    # Relacionamentos: um usuário pode avaliar vários filmes
+    avaliacoes: Mapped[list["Avaliacao"]] = relationship(back_populates="usuario", cascade="all, delete-orphan")
 
     @property
     def email(self):

@@ -15,7 +15,7 @@ class BasicRepositoryMixin:
     para operações comuns de consulta.
     """
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, sort_order=-999)
 
     @classmethod
     def is_empty(cls) -> bool:
@@ -83,8 +83,7 @@ class BasicRepositoryMixin:
         return db.session.execute(sentenca).scalars()
 
     @classmethod
-    def get_by_composed_id(cls,
-                           cls_dict_id: Dict[str, Any]) -> Optional[Self]:
+    def get_by_composed_id(cls, cls_dict_id: Dict[str, Any]) -> Optional[Self]:
         """
         Busca um registro por um ID composto.
 
@@ -99,6 +98,7 @@ class BasicRepositoryMixin:
                 cls_dict_id[k] = uuid.UUID(str(v))
             except ValueError:
                 cls_dict_id[k] = v
+        print(cls_dict_id)
         return db.session.get(cls, cls_dict_id)
 
     @classmethod
@@ -156,5 +156,7 @@ class AuditMixin:
     )
 
     deleted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True)
+        DateTime(timezone=True),
+        default=None,
+        nullable=True
     )
