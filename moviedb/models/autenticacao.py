@@ -1,6 +1,6 @@
 import io
 import secrets
-import uuid
+import uuid6
 from base64 import b64decode, b64encode
 from datetime import datetime
 from io import BytesIO
@@ -479,7 +479,8 @@ class Backup2FA(db.Model, BasicRepositoryMixin, AuditMixin):
     __tablename__ = 'backup2fa'
 
     hash_codigo: Mapped[str] = mapped_column(String(256))
-    usuario_id: Mapped[uuid.UUID] = mapped_column(
+    # id: Mapped[uuid6.UUID] = mapped_column(primary_key=True, default=uuid6.uuid7, sort_order=-999)
+    usuario_id: Mapped[uuid6.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey('usuarios.id', ondelete='CASCADE'),  # Explicit CASCADE
         index=True

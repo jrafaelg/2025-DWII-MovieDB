@@ -41,3 +41,6 @@ celery==5.5.3
 # Geração de documentação automática
 # https://pdoc.dev/
 pdoc==15.0.4
+# implementação para utilizar o UUIDv7
+# https://pypi.org/project/uuid6/
+uuid6==2025.0.1

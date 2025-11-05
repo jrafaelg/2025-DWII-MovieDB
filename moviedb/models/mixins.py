@@ -1,4 +1,4 @@
-import uuid
+import uuid6, uuid
 from datetime import datetime
 from typing import Any, Dict, Optional, Self, Union
 
@@ -15,7 +15,7 @@ class BasicRepositoryMixin:
     para operações comuns de consulta.
     """
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, sort_order=-999)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid6.uuid7, sort_order=-999)
 
     @classmethod
     def is_empty(cls) -> bool:
@@ -39,7 +39,7 @@ class BasicRepositoryMixin:
             Optional[Self]: Instância encontrada ou None.
         """
         try:
-            obj_id = uuid.UUID(str(cls_id))
+            obj_id = uuid6.UUID(str(cls_id))
         except ValueError:
             obj_id = cls_id
         return db.session.get(cls, obj_id)
@@ -119,7 +119,7 @@ class BasicRepositoryMixin:
         """
         for k, v in cls_dict_id.items():
             try:
-                cls_dict_id[k] = uuid.UUID(str(v))
+                cls_dict_id[k] = uuid6.UUID(str(v))
             except ValueError:
                 cls_dict_id[k] = v
         return db.session.get(cls, cls_dict_id)
@@ -144,7 +144,7 @@ class BasicRepositoryMixin:
         # Converte valores que parecem UUID para o tipo UUID
         for k, v in cls_dict_fields.items():
             try:
-                cls_dict_fields[k] = uuid.UUID(str(v))
+                cls_dict_fields[k] = uuid6.UUID(str(v))
             except (ValueError, AttributeError):
                 cls_dict_fields[k] = v
 
@@ -164,7 +164,7 @@ class BasicRepositoryMixin:
     @classmethod
     def get_first_or_none_by(cls,
                              atributo: str,
-                             valor: Union[str, int, uuid.UUID],
+                             valor: Union[str, int, uuid6.UUID],
                              casesensitive: bool = True) -> Optional[Self]:
         """
         Busca o primeiro registro que corresponde ao valor de um atributo.

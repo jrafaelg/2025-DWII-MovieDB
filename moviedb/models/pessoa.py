@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, Uuid, Date, Text, ForeignKey, Boolean, DECIMAL, Integer
+from sqlalchemy import String, Date, Text, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from moviedb.models.mixins import BasicRepositoryMixin, AuditMixin
